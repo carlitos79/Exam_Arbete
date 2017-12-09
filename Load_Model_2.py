@@ -4,6 +4,7 @@ warnings.filterwarnings(action = 'ignore', category = UserWarning, module = 'gen
 warnings.filterwarnings(action = 'ignore', category = UserWarning, module = 'keras')
 from time import time
 from gensim.models.keyedvectors import KeyedVectors
+from gensim.models import Word2Vec
 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Activation, TimeDistributed
 from keras.preprocessing.text import Tokenizer, one_hot
 import numpy as np
@@ -13,16 +14,22 @@ from keras.layers import Input
 from keras.layers.embeddings import Embedding
 from keras.layers import merge
 from keras.models import Model
+from keras.preprocessing.sequence import skipgrams
+from keras.preprocessing import sequence
 from keras.layers.merge import concatenate
 from keras.layers.normalization import BatchNormalization
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from Utils import *
+from Skip_Grams import *
 
 ########################################## DIRECTORIES #################################################
 base_dir = "C:/Users/Carlos Peñaloza/Desktop/No-Backup Zone/RNN_With_Embeddings/"
 corpus = base_dir + "word2vec_model"
 nietzche = "C:/Users/Carlos Peñaloza/Desktop/No-Backup Zone/RNN_With_Embeddings/Nietzche/Nietzche.txt"
 
+text = open(nietzche).read().split()
+
+corpus2 = base_dir + "regular_model"
 ###################################### PARAMETERS #######################################
 vector_dimension = 300
 batch_size = 32
@@ -43,6 +50,7 @@ STAMP = 'lstm_%d_%d_%.2f_%.2f'%(number_of_lstm, number_of_dense, rate_drop_lstm,
 print("Loading...")
 begin = time()
 project_model = KeyedVectors.load_word2vec_format(corpus)
+project_regular_model = Word2Vec.load(corpus2)
 end = time()
 seconds = end - begin
 minutes = seconds / 60
@@ -61,17 +69,15 @@ for i in range(len(project_model.wv.vocab)):
     if embedding_vector is not None:
         embedding_matrix[i] = embedding_vector
 
-valid_size = 5  # Random set of words to evaluate similarity on.
-valid_window = 100  # Only pick dev samples in the head of the distribution.
-valid_examples = np.random.choice(valid_window, valid_size, replace=False)
-
 # input words - in this case we do sample by sample evaluations of the similarity
 valid_word = Input((1,), dtype='int32')
 other_word = Input((1,), dtype='int32')
 
 # setup the embedding layer
-embeddings = Embedding(input_dim=embedding_matrix.shape[0],
-                       output_dim=embedding_matrix.shape[1],
+embeddings = Embedding(input_dim=vocabulary_size,   # embedding_matrix.shape[0] = 6833 -> the number of word2vec word vectors
+                                                    # in other words, the size of the vocabulary
+                       output_dim=vector_dimension, # embedding_matrix.shape[1] = 300 -> vector dimension, which is the
+                                                    # length of the vector we're gonna work with
                        weights=[embedding_matrix])
 
 embedded_a = embeddings(valid_word)
@@ -90,16 +96,26 @@ def get_sim(valid_word_idx, vocab_size):
 
     for i in range(vocab_size):
         in_arr2[0,] = i
-        out2 = k_model.predict([in_arr1, in_arr2], vocabulary_size, verbose=0)[0]
         out = k_model.predict_on_batch([in_arr1, in_arr2])
         sim[i] = out
+
+        #print("PREDICTION:")
+        #prediction = k_model.predict([in_arr1, in_arr2], verbose=0)
+        #print(prediction)
+
     return sim
 
+def get_index_of_word(word):
+    index_of_word = project_model.vocab[word].index
+    return index_of_word
+
+
 #######################################################################
-for i in range(valid_size):
-    valid_word = project_model.wv.index2word[valid_examples[i]]
-    top_k = 5  # number of nearest neighbors
-    sim = get_sim(valid_examples[i], len(project_model.wv.vocab))
+for i in range(1):
+    index_of_word = get_index_of_word("will")
+    valid_word = project_model.wv.index2word[index_of_word]
+    top_k = 3  # number of nearest neighbors
+    sim = get_sim(index_of_word, len(project_model.wv.vocab))
     nearest = (-sim).argsort()[1:top_k + 1]
     log_str = 'Nearest to %s:' % valid_word
 
@@ -107,6 +123,17 @@ for i in range(valid_size):
         close_word = project_model.wv.index2word[nearest[k]]
         log_str = '%s %s,' % (log_str, close_word)
 
-    print(log_str)
+    #print(log_str)
 
 #######################################################################
+
+#words_index = convert_data_to_index(text, project_model)
+#for i in range(10):
+#    print(text[i])
+#    print(words_index[i])
+
+two_skip_bigrams = list(skipgrams(text, n=2, k=2))
+for item in two_skip_bigrams:
+    print(item)
+
+#if you read hard it says something like: it is supposed to proved people with a substitute for religion
