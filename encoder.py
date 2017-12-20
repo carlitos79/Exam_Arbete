@@ -5,7 +5,14 @@ import numpy as np
 from gensim.models import Word2Vec
 from gensim.models import KeyedVectors
 
-# Encoder
+'''
+Encoders:
+Encoder         - Base class for all concrete encoders
+OneHotEncoder   - Encodes a word to a one-hot representation
+Word2VecEncoder - Encodes a word to a word2vec representation
+
+'''
+
 
 class Encoder():
     def fit(self, X, *args, **kwargs):
@@ -21,22 +28,8 @@ class Encoder():
                                   .format(self.__class__.__name__,
                                           self.encode.__name__))
 
-    def save(self, f_name, *args, **kwargs):
-        raise NotImplementedError('abstract function {}.{}'
-                                  '(f_name, *args, **kwargs) '
-                                  'has not been implemented'
-                                  .format(self.__class__.__name__,
-                                          self.save.__name__))
-
-    def load(self, f_name, format, *args, **kwargs):
-        raise NotImplementedError('abstract function {}.{}'
-                                  '(f_name, format, *args, **kwargs) '
-                                  'has not been implemented'
-                                  .format(self.__class__.__name__,
-                                          self.load.__name__))
-
     @property
-    def dimension(self):
+    def dimensionality(self):
         raise NotImplementedError('abstract property {}.{} '
                                   'has not been implemented'
                                   .format(self.__class__.__name__,
@@ -70,8 +63,35 @@ class Word2VecEncoder(Encoder):
             self.model = KeyedVectors.load(f_name, *args, **kwargs)
 
     @property
-    def dimension(self):
+    def dimensionality(self):
         if self.model:
             return self.model.vector_size
         raise AttributeError('{}.model has not been initialized'
                              .format(self.__class__.__name__))
+
+
+class OneHotEncoder(Encoder):
+    def __init__(self):
+        self.index = dict()
+
+    def fit(self, X, *args, **kwargs):
+        self.index = {w:i for i, w in
+                      enumerate(np.unique(np.atleast_1d(X)))}
+
+    def encode(self, X):
+        res = []
+        for w in np.atleast_1d(X):
+            v = np.zeros(self.dimensionality, np.int32)
+            try:
+                v[self.index[w]] = 1
+            except KeyError as e:
+                warnings.warn('Word "{}" cannot be represented '
+                              'in the given one-hot scheme'.format(w),
+                              RuntimeWarning)
+            res.append(v)
+        return np.array(res)
+
+    @property
+    def dimensionality(self):
+        return len(self.index)
+
