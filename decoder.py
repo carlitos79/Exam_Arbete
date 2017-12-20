@@ -6,6 +6,7 @@ from keras.utils import plot_model
 
 # Decoder
 
+
 class Decoder():
     def __init__(self, encoder, n_tokens, max_seq_length):
         self.encoder = encoder
@@ -15,7 +16,7 @@ class Decoder():
         self.index_to_token = dict()
 
         self.decoder_inputs = Input(shape=(None, self.n_tokens))
-        self.decoder_lstm = LSTM(self.encoder.dimension,
+        self.decoder_lstm = LSTM(self.encoder.dimensionality,
                                  return_sequences=True,
                                  return_state=True)
         self.decoder_outputs, _, _ = self.decoder_lstm(self.decoder_inputs)
@@ -29,10 +30,10 @@ class Decoder():
         self.index_to_token = dict([(i, c) for i, c, in enumerate(target_chars)])
 
         decoder_input_data = np.zeros(
-            (self.encoder.dimension, self.max_seq_length, self.n_tokens),
+            (len(y), self.max_seq_length, self.n_tokens),
             dtype='float32')
         decoder_target_data = np.zeros(
-            (self.encoder.dimension, self.max_seq_length, self.n_tokens),
+            (len(y), self.max_seq_length, self.n_tokens),
             dtype='float32')
         for i, target in enumerate(y):
             for t, char in enumerate(target):
@@ -43,7 +44,7 @@ class Decoder():
         self.decoder_model.compile(optimizer='rmsprop',
                                    loss='categorical_crossentropy')
         seeds = np.array([np.reshape(self.encoder.encode(s),
-                                     (1, self.encoder.dimension))
+                                     (1, self.encoder.dimensionality))
                           for s in X])
         hidden_states = K.variable(value=seeds)
         cell_states = K.variable(value=seeds)
@@ -55,8 +56,8 @@ class Decoder():
                                **kwargs)
 
     def decode(self, X):
-        decoder_state_input_h = Input(shape=(self.encoder.dimension,))
-        decoder_state_input_c = Input(shape=(self.encoder.dimension,))
+        decoder_state_input_h = Input(shape=(self.encoder.dimensionality,))
+        decoder_state_input_c = Input(shape=(self.encoder.dimensionality,))
         decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
         decoder_outputs, state_h, state_c = self.decoder_lstm(
             self.decoder_inputs, initial_state=decoder_states_inputs)
@@ -69,9 +70,9 @@ class Decoder():
         res = []
         for x in X:
             state_h = np.reshape(self.encoder.encode(x),
-                                 (1, self.encoder.dimension))
+                                 (1, self.encoder.dimensionality))
             state_c = np.reshape(self.encoder.encode(x),
-                                 (1, self.encoder.dimension))
+                                 (1, self.encoder.dimensionality))
 
             target = np.zeros((1, 1, self.n_tokens))
             target[0, 0, self.token_to_index['\t']] = 1
