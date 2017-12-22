@@ -21,10 +21,10 @@ max_seq_length = max([len(txt) for txt in targets])
 
 # Set the path of the google pre-trained word2vec file
 path = 'GoogleNews-vectors-negative300.bin'
-#encoder = OneHotEncoder()
-#encoder.fit(seeds)
-encoder = Word2VecEncoder()
-encoder.load('GoogleNews-vectors-negative300.bin', format=True)
+encoder = OneHotEncoder()
+encoder.fit(seeds)
+#encoder = Word2VecEncoder()
+#encoder.load('GoogleNews-vectors-negative300.bin', format=True)
 decoder = Decoder(encoder, n_tokens, max_seq_length)
 decoder.fit(seeds, targets, batch_size=32, epochs=70)
 
