@@ -1,6 +1,7 @@
 import codecs
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
+from encoder import SentenceEncoder
 from decoder import Decoder
 
 # Test
@@ -10,7 +11,9 @@ targets = []
 start_seq = '\t'
 end_seq = '\n'
 with codecs.open('quotes.txt', encoding='utf-8') as f:
-    lines = f.read().lower().split('\n')
+    lines = f.read().lower().replace('\r', '')\
+        .replace('.', '').replace('!', '')\
+        .replace('?','').replace(',', '').split('\n')
 for line in lines:
     s, t = line.split(';;')
     seeds.append(s)
@@ -19,16 +22,28 @@ for line in lines:
 n_tokens = len(set([c for c in ''.join(targets)]))
 max_seq_length = max([len(txt) for txt in targets])
 
-# Set the path of the google pre-trained word2vec file
-path = 'GoogleNews-vectors-negative300.bin'
+# Example OneHotEncoder
+'''
 encoder = OneHotEncoder()
 encoder.fit(seeds)
-#encoder = Word2VecEncoder()
-#encoder.load('GoogleNews-vectors-negative300.bin', format=True)
-decoder = Decoder(encoder, n_tokens, max_seq_length)
-decoder.fit(seeds, targets, batch_size=32, epochs=70)
+'''
 
-test_seed = 'life'
+#Example Word2VecEncoder
+'''
+encoder = Word2VecEncoder()
+encoder.load('pretrained.wv')
+'''
+
+# Example SentenceEncoder
+we = Word2VecEncoder()
+we.load('pretrained.wv')
+encoder = SentenceEncoder(we)
+encoder.fit([t[1:-1] for t in targets])
+print([t[1:-1] for t in targets])
+
+decoder = Decoder(encoder, n_tokens, max_seq_length)
+decoder.fit([t[1:-1] for t in targets], targets, batch_size=32, epochs=70)
+test_seed = 'my life is great'
 test_target = decoder.decode([test_seed])[0]
 print('seed:', test_seed)
 print('target:', test_target)
