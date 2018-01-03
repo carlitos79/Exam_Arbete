@@ -2,6 +2,10 @@ import codecs
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
 from decoder import Decoder
+from LdaToWordToVecOneHot import *
+
+quote = "Love has no age, no limit; and no death."
+input2w2v = Input2Word2VecEncoder(quote)
 
 seeds = []
 targets = []
@@ -29,7 +33,7 @@ encoder.load(path, format=True)
 decoder = Decoder(encoder, n_tokens, max_seq_length)
 decoder.fit(seeds, targets, batch_size=32, epochs=70)
 
-test_seed = 'change'
+test_seed = input2w2v
 test_target = decoder.decode([test_seed])[0]
 print('seed:', test_seed)
 print('target:', test_target)
