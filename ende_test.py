@@ -4,6 +4,7 @@ from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
 from decoder import Decoder2
 
+# Tests
 
 def load_data(f_name):
     '''
