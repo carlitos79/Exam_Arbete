@@ -9,7 +9,9 @@ from keras.utils import to_categorical
 from keras.preprocessing.sequence import pad_sequences
 from keras.callbacks import ModelCheckpoint
 
-# Decoder
+# Cmon git!!!
+
+
 class Decoder2():
     '''
     Class representing the concept of a decoder capable of performing
@@ -24,6 +26,8 @@ class Decoder2():
         self.encoder = encoder
         self.tokenizer = Tokenizer()
         self.model = None
+        self.max_length = 0
+        self.vocab_size = 0
 
     def fit(self, X, y, epochs=25, trace=True):
         '''
@@ -32,20 +36,19 @@ class Decoder2():
         :param y: An iterable of target sequences.
         :param epochs: Number of training epochs.
         :param trace: Flag indicating whether to trace progress.
-        :param save: Flag indicating whether to save model weights.
         '''
         # Prepare training data
         targets = ['startseq ' + t + ' endseq' for t in np.atleast_1d(y)]
         self.tokenizer.fit_on_texts(targets)
         self.max_length = max(len(t.split()) for t in targets)
-        vocab_size = len(self.tokenizer.word_index) + 1
+        self.vocab_size = len(self.tokenizer.word_index) + 1
         X1, X2, y = list(), list(), list()
         for seed, target in zip(np.atleast_1d(X), np.atleast_1d(targets)):
             seq = self.tokenizer.texts_to_sequences([target])[0]
             for i in range(1, len(seq)):
                 in_seq = pad_sequences([seq[:i]], maxlen=self.max_length)[0]
                 out_seq = to_categorical([seq[i]],
-                                         num_classes=vocab_size)[0]
+                                         num_classes=self.vocab_size)[0]
                 X1.append(self.encoder.encode(seed)[0])
                 X2.append(in_seq)
                 y.append(out_seq)
@@ -54,7 +57,7 @@ class Decoder2():
         y = np.array(y)
 
         if self.model is None:
-            self._init_model(vocab_size, self.max_length)
+            self._init_model(self.vocab_size)
 
         self.model.fit([X1, X2], y, epochs=epochs, verbose=trace)
 
@@ -77,24 +80,6 @@ class Decoder2():
                 target += ' ' + word
             res.append(target[9:])
         return np.array(res)
-
-    def save(self, f_name, *args, **kwargs):
-        '''
-        Saves the parameters of the trained model.
-        :param f_name: The target path.
-        :param args: Forwarding parameters.
-        :param kwargs: Forwarding parameters.
-        '''
-        self.model.save(f_name, *args, **kwargs)
-
-    def load(self, f_name, *args, **kwargs):
-        '''
-        Loads the parameters of a pre-trained model.
-        :param f_name: The source path.
-        :param args: Forwarding parameters.
-        :param kwargs: Forwarding parameters.
-        '''
-        self.model.load_weights(f_name, *args, **kwargs)
 
     def plot(self, f_name):
         '''
@@ -120,12 +105,16 @@ class Decoder2():
                 return word
         return None
 
-    def _init_model(self, vocab_size, max_length):
+    def _init_model(self, vocab_size):
+        '''
+        Initializes the underlying model.
+        :param vocab_size: Size of the vocabulary.
+        '''
         latent_dim = 256
         seed_input = Input(shape=(self.encoder.size,))
         seed_dropout = Dropout(0.5)(seed_input)
         seed_dense = Dense(latent_dim, activation='relu')(seed_dropout)
-        gen_input = Input(shape=(max_length,))
+        gen_input = Input(shape=(self.max_length,))
         gen_embed = Embedding(vocab_size, latent_dim, mask_zero=True)(gen_input)
         gen_dropout = Dropout(0.5)(gen_embed)
         gen_lstm = LSTM(latent_dim)(gen_dropout)
