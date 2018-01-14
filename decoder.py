@@ -1,10 +1,141 @@
 import numpy as np
 import keras.backend as K
 from keras.models import Model
-from keras.layers import Input, LSTM, Dense
+from keras.layers import Input, LSTM, Dense, Dropout, Embedding
+from keras.layers.merge import add
 from keras.utils import plot_model
+from keras.preprocessing.text import Tokenizer
+from keras.utils import to_categorical
+from keras.preprocessing.sequence import pad_sequences
+from keras.callbacks import ModelCheckpoint
 
 # Decoder
+class Decoder2():
+    '''
+    Class representing the concept of a decoder capable of performing
+    sequence predictions (decoding) given seeds and an encoder object.
+    '''
+    def __init__(self, encoder):
+        '''
+        Initializes the decoder object.
+        :param encoder: An encoder object capable of transforming
+                        seeds into vector representations.
+        '''
+        self.encoder = encoder
+        self.tokenizer = Tokenizer()
+        self.model = None
+
+    def fit(self, X, y, epochs=25, trace=True):
+        '''
+        Fits the model.
+        :param X: An iterable of seeds.
+        :param y: An iterable of target sequences.
+        :param epochs: Number of training epochs.
+        :param trace: Flag indicating whether to trace progress.
+        :param save: Flag indicating whether to save model weights.
+        '''
+        # Prepare training data
+        targets = ['startseq ' + t + ' endseq' for t in np.atleast_1d(y)]
+        self.tokenizer.fit_on_texts(targets)
+        self.max_length = max(len(t.split()) for t in targets)
+        vocab_size = len(self.tokenizer.word_index) + 1
+        X1, X2, y = list(), list(), list()
+        for seed, target in zip(np.atleast_1d(X), np.atleast_1d(targets)):
+            seq = self.tokenizer.texts_to_sequences([target])[0]
+            for i in range(1, len(seq)):
+                in_seq = pad_sequences([seq[:i]], maxlen=self.max_length)[0]
+                out_seq = to_categorical([seq[i]],
+                                         num_classes=vocab_size)[0]
+                X1.append(self.encoder.encode(seed)[0])
+                X2.append(in_seq)
+                y.append(out_seq)
+        X1 = np.array(X1)
+        X2 = np.array(X2)
+        y = np.array(y)
+
+        if self.model is None:
+            self._init_model(vocab_size, self.max_length)
+
+        self.model.fit([X1, X2], y, epochs=epochs, verbose=trace)
+
+    def decode(self, X):
+        '''
+        Decodes a set of seeds into target sequences.
+        :param X: An iterable of seeds.
+        :return: An np.ndarray of target sequences.
+        '''
+        res = []
+        for x in X:
+            seed = self.encoder.encode(x)[0].reshape((1, 300))
+            target = 'startseq'
+            for i in range(self.max_length):
+                seq = self.tokenizer.texts_to_sequences([target])[0]
+                seq = pad_sequences([seq], maxlen=self.max_length)
+                word = self._word(np.argmax(self.model.predict([seed, seq])))
+                if word is None or word == 'endseq':
+                    break
+                target += ' ' + word
+            res.append(target[9:])
+        return np.array(res)
+
+    def save(self, f_name, *args, **kwargs):
+        '''
+        Saves the parameters of the trained model.
+        :param f_name: The target path.
+        :param args: Forwarding parameters.
+        :param kwargs: Forwarding parameters.
+        '''
+        self.model.save(f_name, *args, **kwargs)
+
+    def load(self, f_name, *args, **kwargs):
+        '''
+        Loads the parameters of a pre-trained model.
+        :param f_name: The source path.
+        :param args: Forwarding parameters.
+        :param kwargs: Forwarding parameters.
+        '''
+        self.model.load_weights(f_name, *args, **kwargs)
+
+    def plot(self, f_name):
+        '''
+        Creates a plot of the model.
+        :param f_name: The target path of the plot.
+        '''
+        plot_model(self.model, f_name)
+
+    def summary(self):
+        '''
+        :return: A summary of the model.
+        '''
+        return self.model.summary()
+
+    def _word(self, id):
+        '''
+        Retrieves the word at index id.
+        :param id: The index of the word.
+        :return: The word at index id.
+        '''
+        for word, index in self.tokenizer.word_index.items():
+            if index == id:
+                return word
+        return None
+
+    def _init_model(self, vocab_size, max_length):
+        latent_dim = 256
+        seed_input = Input(shape=(self.encoder.size,))
+        seed_dropout = Dropout(0.5)(seed_input)
+        seed_dense = Dense(latent_dim, activation='relu')(seed_dropout)
+        gen_input = Input(shape=(max_length,))
+        gen_embed = Embedding(vocab_size, latent_dim, mask_zero=True)(gen_input)
+        gen_dropout = Dropout(0.5)(gen_embed)
+        gen_lstm = LSTM(latent_dim)(gen_dropout)
+        dec_inputs = add([seed_dense, gen_lstm])
+        dec_dense = Dense(latent_dim, activation='relu')(dec_inputs)
+        dec_outputs = Dense(vocab_size, activation='softmax')(dec_dense)
+        self.model = Model(inputs=[seed_input, gen_input], outputs=dec_outputs)
+        self.model.compile(loss='categorical_crossentropy', optimizer='adam')
+
+
 
 
 class Decoder():
@@ -61,13 +192,14 @@ class Decoder():
 
         self.decoder_model.compile(optimizer='rmsprop',
                                    loss='categorical_crossentropy')
+
         seeds = np.array([np.reshape(self.encoder.encode(s),
                                      (1, self.encoder.size))
                           for s in X])
         hidden_states = K.variable(value=seeds)
         cell_states = K.variable(value=seeds)
         self.decoder_model.layers[1].states[0] = hidden_states
-        self.decoder_model.layers[1].states[1] = cell_states
+        #self.decoder_model.layers[1].states[1] = cell_states
         self.decoder_model.fit(decoder_input_data,
                                decoder_target_data,
                                *args,
@@ -94,8 +226,9 @@ class Decoder():
         for x in X:
             state_h = np.reshape(self.encoder.encode(x),
                                  (1, self.encoder.size))
-            state_c = np.reshape(self.encoder.encode(x),
-                                 (1, self.encoder.size))
+            state_c = np.zeros((1, self.encoder.size))
+            #state_c = np.reshape(self.encoder.encode(x),
+            #                     (1, self.encoder.size))
 
             target = np.zeros((1, 1, self.n_tokens))
             target[0, 0, self.token_to_index['\t']] = 1

@@ -2,8 +2,11 @@ import warnings
 warnings.filterwarnings(action='ignore', category=UserWarning, module='gensim')
 
 import numpy as np
+from gensim.models.doc2vec import TaggedDocument
 from gensim.models import Word2Vec
 from gensim.models import KeyedVectors
+from gensim.models import Doc2Vec
+from gensim.utils import simple_preprocess
 from sklearn.decomposition import TruncatedSVD
 
 '''
@@ -253,6 +256,32 @@ class SentenceSentimentEncoder(Encoder):
         the pre-trained Word2Vec tool.
         '''
         return self.sentence_encoder.size + 1
+
+
+class Doc2VecEncoder(Encoder):
+    def __init__(self, *args, **kwargs):
+        self.model = Doc2Vec(*args, **kwargs)
+
+    def fit(self, X):
+        corpus = [TaggedDocument(simple_preprocess(x), [i])
+                  for i,x in enumerate(np.atleast_1d(X))]
+        self.model.build_vocab(corpus)
+        self.model.train(corpus,
+                         total_examples=self.model.corpus_count,
+                         epochs=self.model.iter)
+
+    def encode(self, X):
+        return np.array([self.model.infer_vector(simple_preprocess(x)) for x in np.atleast_1d(X)]) * 10
+
+    def load(self, fname):
+        self.model = KeyedVectors.load(fname)
+
+    def save(self, fname):
+        self.model.save(fname)
+
+    @property
+    def size(self):
+        return self.model.vector_size
 
 
 
