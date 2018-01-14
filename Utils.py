@@ -6,6 +6,8 @@ from nltk.stem import SnowballStemmer
 import string
 import numpy as np
 import random
+from nltk.tokenize import word_tokenize
+import string
 
 #A class to extract sentences from a text corpus from files inside a folder/directory
 class My_Sentence(object):
@@ -26,6 +28,20 @@ def convert_data_to_index(string_data, wv):
             index_data.append(wv.vocab[word].index)
     return index_data
 
+class Tokenize_Into_Words(object):
+    def __init__(self, dirname):
+        self.dirname = dirname
+
+    def __iter__(self):
+        for fname in os.listdir(self.dirname):
+            for line in open(os.path.join(self.dirname, fname)):
+                    allWords = []
+                    tokenized_line = ' '.join(word_tokenize(line))
+                    single_sentence = [word for word in tokenized_line.split()]
+                    for word in single_sentence:
+                        allWords.append(word_tokenize(word.lower()))
+                        for wrd in allWords:
+                            yield wrd
 
 # The function "text_to_wordlist" is from
 # https://www.kaggle.com/currie32/quora-question-pairs/the-importance-of-cleaning-text
@@ -43,15 +59,49 @@ def text_to_wordlist(text, remove_stopwords=False, stem_words=False):
 
     # Clean the text
     text = re.sub(r"[^A-Za-z0-9^,!.\/'+-=]", " ", text)
-    text = re.sub(r"what's", "what is ", text)
-    text = re.sub(r"\'s", " ", text)
-    text = re.sub(r"\'ve", " have ", text)
-    text = re.sub(r"can't", "cannot ", text)
-    text = re.sub(r"n't", " not ", text)
-    text = re.sub(r"i'm", "i am ", text)
-    text = re.sub(r"\'re", " are ", text)
-    text = re.sub(r"\'d", " would ", text)
-    text = re.sub(r"\'ll", " will ", text)
+
+    text = re.sub(r"whats", "", text)
+    text = re.sub( r"whos", "", text )
+    text = re.sub( r"wheres", "", text )
+    text = re.sub( r"whens", "", text )
+    text = re.sub( r"hows", "", text )
+
+    text = re.sub( r"cant", "", text )
+    text = re.sub( r"doesnt", "", text )
+    text = re.sub( r"dont", "", text )
+    text = re.sub( r"wont", "", text )
+
+    text = re.sub( r"im", "", text )
+    text = re.sub( r"youre", "", text )
+    text = re.sub( r"were", "", text )
+    text = re.sub( r"theyre", "", text )
+
+    text = re.sub( r"id", "", text )
+    text = re.sub( r"youd", "", text )
+    text = re.sub( r"shed", "", text )
+    text = re.sub( r"hed", "", text )
+    text = re.sub( r"wed", "", text )
+    text = re.sub( r"theyd", "", text )
+
+    text = re.sub( r"ill", "", text )
+    text = re.sub( r"youll", "", text )
+    text = re.sub( r"shell", "", text )
+    text = re.sub( r"he'll", "will", text )
+    text = re.sub( r"well", "", text )
+    text = re.sub( r"theyll", "", text )
+
+    text = re.sub( r"ive", "", text )
+    text = re.sub( r"youve", "", text )
+    text = re.sub( r"shes", "", text )
+    text = re.sub( r"hes", "", text )
+    text = re.sub( r"weve", "", text )
+    text = re.sub( r"theyve", "", text )
+
+    text = re.sub( r"havent", "", text )
+    text = re.sub( r"hasnt", "", text )
+    text = re.sub( r"wouldnt", "", text )
+    text = re.sub( r"shouldnt", "", text )
+
     text = re.sub(r",", " ", text)
     text = re.sub(r"\.", " ", text)
     text = re.sub(r"!", " ! ", text)
@@ -153,4 +203,24 @@ def generate_seed(text, seq_lens=(2, 4, 8, 16, 32)):
     seed = text[start_index: start_index + seq_len]
     return seed
 
+def get_sim(valid_word_idx, vocab_size, k_model):
+    sim = np.zeros((vocab_size,))
+    in_arr1 = np.zeros((1,))
+    in_arr2 = np.zeros((1,))
+    in_arr1[0,] = valid_word_idx
+
+    for i in range(vocab_size):
+        in_arr2[0,] = i
+        out = k_model.predict_on_batch([in_arr1, in_arr2])
+        sim[i] = out
+    return sim
+
+def GetridOfDigits(sentence):
+    word = re.sub(r'\d', "", sentence)
+    return word
+
+def FileGetRidOfDigits(recipient_file, file_to_clean):
+    with open(recipient_file, "w") as text_file:
+        for verb in file_to_clean:
+            text_file.write("%s" % GetridOfDigits(verb))
 
