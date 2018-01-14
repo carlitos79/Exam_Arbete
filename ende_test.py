@@ -2,7 +2,7 @@ import codecs
 import string
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
-from decoder import Decoder2
+from decoder import Decoder
 
 # Cmon git!!!
 
@@ -56,7 +56,7 @@ def test_word2vec_decoder(seeds, source_path, target_path):
     _, topics, quotes = load_data(source_path)
     encoder = Word2VecEncoder()
     encoder.load('pretrained.wv')
-    decoder = Decoder2(encoder)
+    decoder = Decoder(encoder)
     decoder.fit(topics, quotes, epochs=1, trace=True)
     results = decoder.decode(seeds)
     write_result('word2vec', seeds, results, target_path)
@@ -73,7 +73,7 @@ def save_onehot_decoder(seeds, source_path, target_path):
     _, topics, quotes = load_data(source_path)
     encoder = OneHotEncoder()
     encoder.fit(topics)
-    decoder = Decoder2(encoder)
+    decoder = Decoder(encoder)
     decoder.fit(topics, quotes, trace=True)
     results = decoder.decode(seeds)
     write_result('one-hot', seeds, results, target_path)

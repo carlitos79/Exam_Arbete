@@ -12,7 +12,7 @@ from keras.callbacks import ModelCheckpoint
 # Cmon git!!!
 
 
-class Decoder2():
+class Decoder():
     '''
     Class representing the concept of a decoder capable of performing
     sequence predictions (decoding) given seeds and an encoder object.
@@ -127,7 +127,7 @@ class Decoder2():
 
 
 
-class Decoder():
+class Decoder_old():
     '''
     Class representing the concept of a decoder capable of performing
     sequence predictions (decoding) given seeds and an encoder object.
