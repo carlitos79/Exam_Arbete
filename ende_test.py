@@ -45,7 +45,7 @@ def write_result(model, seeds, results, f_name):
         f.write('\n' + '-'*100 + '\n')
 
 
-def test_word2vec_decoder(seeds, source_path, target_path):
+def test_word2vec(seeds, source_path, target_path):
     '''
     Tests a decoder model with a word2vec encoder.
     :param seeds: The seeds to test the model on.
@@ -62,7 +62,7 @@ def test_word2vec_decoder(seeds, source_path, target_path):
     write_result('word2vec', seeds, results, target_path)
 
 
-def save_onehot_decoder(seeds, source_path, target_path):
+def test_onehot(seeds, source_path, target_path):
     '''
     Tests a decoder model with a one-hot encoder.
     :param seeds: The seeds to test the model on.
@@ -78,7 +78,7 @@ def save_onehot_decoder(seeds, source_path, target_path):
     results = decoder.decode(seeds)
     write_result('one-hot', seeds, results, target_path)
 
-test_word2vec_decoder(seeds=['age', 'amazing', 'best'],
+test_word2vec(seeds=['age', 'amazing', 'best'],
                       source_path='data/quotes3.txt',
                       target_path='results.txt')
 
