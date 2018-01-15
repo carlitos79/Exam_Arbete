@@ -69,7 +69,7 @@ class Decoder():
         '''
         res = []
         for x in X:
-            seed = self.encoder.encode(x)[0].reshape((1, 300))
+            seed = self.encoder.encode(x)[0].reshape((1, self.encoder.size))
             target = 'startseq'
             for i in range(self.max_length):
                 seq = self.tokenizer.texts_to_sequences([target])[0]
