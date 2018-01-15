@@ -17,7 +17,6 @@ def load_data(f_name):
     print('Reading data from file...')
     with codecs.open(f_name, encoding='utf-8') as f:
         lines = f.read().split('\n')
-    lines = lines[:200] + lines[2000:2200] + lines[4000:4200] + lines[6000:6200]
     sentiments, topics, quotes = zip(*[(s,t,q) for s,t,q in
                                        [l.split(';;') for l in lines]])
     print('...Finished reading data from file')
@@ -72,7 +71,7 @@ def test_word2vec(seeds, source_path, target_path):
     print('...Finished initializing the decoder')
     print('Fitting the decoder...')
     t = time.time()
-    decoder.fit(topics, quotes, epochs=20, trace=True)
+    decoder.fit(topics, quotes, epochs=25, trace=True)
     train_time = time.time() - t
     print('...Finished fitting the decoder')
     print('Predicting sequences...')
@@ -101,7 +100,7 @@ def test_onehot(seeds, source_path, target_path):
     print('...Finished initializing the decoder')
     print('Fitting the decoder...')
     t = time.time()
-    decoder.fit(topics, quotes, epochs=20, trace=True)
+    decoder.fit(topics, quotes, epochs=25, trace=True)
     train_time = time.time() - t
     print('...Finished fitting the decoder')
     print('Predicting sequences...')
