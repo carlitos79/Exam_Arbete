@@ -8,7 +8,7 @@ amazing      --> i love to have a great boss its just an amazing meal each time 
 architecture --> i believe that artistic activities change that has been the architecture of anything i think about architecture is the sydney superstitions its just woven into the idea that art legs rhythm and yet the same way it will not understand
 attitude     --> i think i think that generally music should be a chicano that nobody is that we have a good sign they want to be wearing after a good listener you dont have to put it and nuclear wastes to sludge from sewage to sleep up that there is on the middle east
 
-----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
 Results from decoder(one-hot):
 
 Training time: 13304.832666873932
@@ -19,4 +19,4 @@ amazing      --> i think the word were an attitude was that shes far by us thing
 architecture --> i think the building has integrity have a very religious family on a big attitude and if you have been a big effort and if anybody to do up what he could say it else else its an early age
 attitude     --> i think the attraction of american idol is about the basic early age
 
-----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
