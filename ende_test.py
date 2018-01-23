@@ -1,8 +1,8 @@
 import codecs
 import string
-from decoder import Decoder
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
+from decoder import Decoder
 
 CHECK_MARK = u'\u2713'
 
