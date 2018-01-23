@@ -1,5 +1,5 @@
-import codecs
 import string
+import codecs
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
 from decoder import Decoder
