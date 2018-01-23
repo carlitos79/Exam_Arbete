@@ -3,31 +3,32 @@ import string
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
 from decoder import Decoder
-import time
 
-# Cmon git!!!
+CHECK_MARK = u'\u2713'
 
 
-def load_data(f_name):
+def load_data(f_name, n_samples):
     '''
     Loads the data in the specified file.
     :param f_name: The filename of the data location.
     :return: Three lists: sentiments, topics, quotes
     '''
-    print('Reading data from file...')
+    print('Reading data from file...', end='')
     with codecs.open(f_name, encoding='utf-8') as f:
         lines = f.read().split('\n')
+    if n_samples != 'all':
+        lines = lines[:n_samples]
     sentiments, topics, quotes = zip(*[(s,t,q) for s,t,q in
                                        [l.split(';;') for l in lines]])
-    print('...Finished reading data from file')
-    print('Pre-processing data...')
+    print(CHECK_MARK)
+    print('Pre-processing data...', end='')
     sentiments = [1 if s == 'positive'
                   else -1 if s == 'negative' else 0
                   for s in sentiments]
     table = str.maketrans('', '', string.punctuation)
     quotes = [' '.join([w.lower().translate(table) for w in q.split()])
               for q in quotes]
-    print('...Finished pre-processing data')
+    print(CHECK_MARK)
     return sentiments, topics, quotes
 
 
@@ -38,9 +39,8 @@ def write_result(model, train_time, test_time, seeds, results, f_name):
     :param seeds: The seeds that was tested on.
     :param results: The resulting text sequences that was obtained.
     :param f_name: The filename which to write the results to.
-    :return:
     '''
-    print('Writing results to file...')
+    print('Writing results to file...', end='')
     seed_space = max(len(s) for s in seeds)
     form_str = '{:' + str(seed_space) + 's} --> {}\n'
     with open(f_name, 'at+') as f:
@@ -50,71 +50,50 @@ def write_result(model, train_time, test_time, seeds, results, f_name):
         for s, r in zip(seeds, results):
             f.write(form_str.format(s, r))
         f.write('\n' + '-'*100 + '\n')
-    print('...Finished writing results to file')
+    print(CHECK_MARK)
 
 
-def test_word2vec(seeds, source_path, target_path):
+def test_word2vec(source_path, target_paths, n_samples):
     '''
     Tests a decoder model with a word2vec encoder.
     :param seeds: The seeds to test the model on.
     :param source_path: The path to the training data.
-    :param target_path: The path to the results data.
-    :return:
+    :param target_path: The paths to save the model to.
     '''
-    _, topics, quotes = load_data(source_path)
-    print('Loading pre-trained word2vec model...')
+    _, topics, quotes = load_data(source_path, n_samples)
+    print('Loading pre-trained word2vec model...', end='')
     encoder = Word2VecEncoder()
     encoder.load('pretrained.wv')
-    print('...Finished loading pre-trained word2vec model')
-    print('Initializing the decoder...')
+    print(CHECK_MARK)
+    print('Initializing the decoder...', end='')
     decoder = Decoder(encoder)
-    print('...Finished initializing the decoder')
+    print(CHECK_MARK)
     print('Fitting the decoder...')
-    t = time.time()
-    decoder.fit(topics, quotes, epochs=25, trace=True)
-    train_time = time.time() - t
-    print('...Finished fitting the decoder')
-    print('Predicting sequences...')
-    t = time.time()
-    results = decoder.decode(seeds)
-    test_time = time.time() - t
-    print('...Finished predicting sequences')
-    write_result('word2vec', train_time, test_time, seeds, results, target_path)
+    decoder.fit_generator(topics, quotes, epochs=25, batch_size=32, trace=True)
+    print('Fitting the decoder...' + CHECK_MARK)
+    print('Saving model...', end='')
+    decoder.save(target_paths)
+    print(CHECK_MARK)
 
 
-def test_onehot(seeds, source_path, target_path):
+def test_onehot(source_path, target_paths, n_samples):
     '''
     Tests a decoder model with a one-hot encoder.
     :param seeds: The seeds to test the model on.
     :param source_path: The path to the training data.
-    :param target_path: The path to the results data.
-    :return:
+    :param target_path: The paths to save the model to.
     '''
-    _, topics, quotes = load_data(source_path)
-    print('Fitting the one-hot encoder...')
+    _, topics, quotes = load_data(source_path, n_samples)
+    print('Fitting the one-hot encoder...', end='')
     encoder = OneHotEncoder()
     encoder.fit(topics)
-    print('...Finished fitting the one-hot encoder')
-    print('Initializing the decoder...')
+    print(CHECK_MARK)
+    print('Initializing the decoder...', end='')
     decoder = Decoder(encoder)
-    print('...Finished initializing the decoder')
+    print(CHECK_MARK)
     print('Fitting the decoder...')
-    t = time.time()
-    decoder.fit(topics, quotes, epochs=25, trace=True)
-    train_time = time.time() - t
-    print('...Finished fitting the decoder')
-    print('Predicting sequences...')
-    t = time.time()
-    results = decoder.decode(seeds)
-    test_time = time.time() - t
-    print('...Finished predicting sequences')
-    write_result('one-hot', train_time, test_time, seeds, results, target_path)
-
-test_word2vec(seeds=['age', 'amazing', 'architecture', 'attitude'],
-              source_path='data/Ranked_Quotes.txt',
-              target_path='results.txt')
-
-test_onehot(seeds=['age', 'amazing', 'architecture', 'attitude'],
-            source_path='data/Ranked_Quotes.txt',
-            target_path='results.txt')
-
+    decoder.fit_generator(topics, quotes, epochs=25, batch_size=32, trace=True)
+    print('Fitting the decoder...' + CHECK_MARK)
+    print('Saving model...', end='')
+    decoder.save(target_paths)
+    print(CHECK_MARK)

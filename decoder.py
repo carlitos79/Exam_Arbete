@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import keras.backend as K
 from keras.models import Model
@@ -7,9 +8,8 @@ from keras.utils import plot_model
 from keras.preprocessing.text import Tokenizer
 from keras.utils import to_categorical
 from keras.preprocessing.sequence import pad_sequences
-from keras.callbacks import ModelCheckpoint
-
-# Cmon git!!!
+from warnings import showwarning
+from pickle import dump, load
 
 
 class Decoder():
@@ -29,19 +29,42 @@ class Decoder():
         self.max_length = 0
         self.vocab_size = 0
 
-    def fit(self, X, y, epochs=25, trace=True):
+    def fit_generator(self, X, y, epochs=25, batch_size=32, trace=True):
+        '''
+        Fits the model from a generator.
+        :param X: An iterable of seeds, each represented as a string.
+        :param y: An iterable of targets, each represented as a string.
+        :param epochs: Number of training epochs.
+        :param batch_size: Size of each training batch.
+        :param trace: Flag indicating whether to trace progress.
+        '''
+        targets = ['startseq ' + t + ' endseq' for t in np.atleast_1d(y)]
+        self.tokenizer.fit_on_texts(targets)
+        self.max_length = max(len(t.split()) for t in targets)
+        self.vocab_size = len(self.tokenizer.word_index) + 1
+
+        if self.model is None:
+            self._init_model(self.vocab_size)
+        steps = math.ceil((len(y) * self.max_length) / batch_size)
+        self.model.fit_generator(self._gen(X, targets, batch_size, steps),
+                                 epochs=epochs,
+                                 verbose=trace,
+                                 steps_per_epoch=steps)
+
+    def fit(self, X, y, epochs=25, batch_size=32, trace=True):
         '''
         Fits the model.
         :param X: An iterable of seeds.
         :param y: An iterable of target sequences.
         :param epochs: Number of training epochs.
+        :param batch_size: Size of each training batch.
         :param trace: Flag indicating whether to trace progress.
         '''
-        # Prepare training data
         targets = ['startseq ' + t + ' endseq' for t in np.atleast_1d(y)]
         self.tokenizer.fit_on_texts(targets)
         self.max_length = max(len(t.split()) for t in targets)
         self.vocab_size = len(self.tokenizer.word_index) + 1
+
         X1, X2, y = list(), list(), list()
         for seed, target in zip(np.atleast_1d(X), np.atleast_1d(targets)):
             seq = self.tokenizer.texts_to_sequences([target])[0]
@@ -59,26 +82,36 @@ class Decoder():
         if self.model is None:
             self._init_model(self.vocab_size)
 
-        self.model.fit([X1, X2], y, epochs=epochs, verbose=trace)
+        self.model.fit([X1, X2], y, epochs=epochs,
+                       batch_size=batch_size, verbose=trace)
 
-    def decode(self, X):
+    def decode(self, seeds):
         '''
         Decodes a set of seeds into target sequences.
         :param X: An iterable of seeds.
         :return: An np.ndarray of target sequences.
         '''
         res = []
-        for x in X:
-            seed = self.encoder.encode(x)[0].reshape((1, self.encoder.size))
-            target = 'startseq'
-            for i in range(self.max_length):
-                seq = self.tokenizer.texts_to_sequences([target])[0]
-                seq = pad_sequences([seq], maxlen=self.max_length)
-                word = self._word(np.argmax(self.model.predict([seed, seq])))
-                if word is None or word == 'endseq':
-                    break
-                target += ' ' + word
-            res.append(target[9:])
+        sos = 'startseq'
+        sos_len = len(sos)
+        eos = 'endseq'
+        for seed in np.atleast_1d(seeds):
+            if seed in self.encoder.vocab:
+                vec = self.encoder.encode(seed)[0].reshape((1, self.encoder.size))
+                target = sos
+                for i in range(self.max_length):
+                    seq = self.tokenizer.texts_to_sequences([target])[0]
+                    seq = pad_sequences([seq], maxlen=self.max_length)
+                    word = self._word(np.argmax(self.model.predict([vec, seq])))
+                    if word is None or word == eos:
+                        break
+                    target += ' ' + word
+                res.append(target[sos_len:])
+            else:
+                showwarning("Unable to encode seed '{}'".format(seed),
+                            category=RuntimeWarning,
+                            filename='decoder.py',
+                            lineno=99)
         return np.array(res)
 
     def plot(self, f_name):
@@ -93,6 +126,31 @@ class Decoder():
         :return: A summary of the model.
         '''
         return self.model.summary()
+
+    def save(self, f_names):
+        """
+        Saves a model to file.
+        :param f_names: A tuple of filenames (root_path, weights_path)
+                        to save the model to.
+        """
+        self.model.save_weights(f_names[1])
+        temp = self.model
+        self.model = None
+        dump(self, open(f_names[0], 'wb'))
+        self.model = temp
+
+    @staticmethod
+    def load(f_names):
+        '''
+        Loads a model from file.
+        :param f_names: A tuple of paths (root_path, weights_path)
+                        to the saved model.
+        :return: The loaded model.
+        '''
+        dec = load(open(f_names[0], 'rb'))
+        dec._init_model(dec.vocab_size)
+        dec.model.load_weights(f_names[1])
+        return dec
 
     def _word(self, id):
         '''
@@ -112,19 +170,57 @@ class Decoder():
         '''
         latent_dim = 256
         seed_input = Input(shape=(self.encoder.size,))
-        seed_dropout = Dropout(0.5)(seed_input)
-        seed_dense = Dense(latent_dim, activation='relu')(seed_dropout)
+        seed_dense = Dense(latent_dim, activation='relu')(seed_input)
         gen_input = Input(shape=(self.max_length,))
-        gen_embed = Embedding(vocab_size, latent_dim, mask_zero=True)(gen_input)
-        gen_dropout = Dropout(0.5)(gen_embed)
-        gen_lstm = LSTM(latent_dim)(gen_dropout)
+        gen_embed = Embedding(vocab_size, latent_dim, mask_zero=True)(
+            gen_input)
+        gen_lstm = LSTM(latent_dim)(gen_embed)
         dec_inputs = add([seed_dense, gen_lstm])
-        dec_dense = Dense(latent_dim, activation='relu')(dec_inputs)
-        dec_outputs = Dense(vocab_size, activation='softmax')(dec_dense)
+        dec_inputs_dropout = Dropout(0.2)(dec_inputs)
+        dec_dense = Dense(latent_dim, activation='relu')(dec_inputs_dropout)
+        dec_hidden_dropout = Dropout(0.5)(dec_dense)
+        dec_outputs = Dense(vocab_size, activation='softmax')(dec_hidden_dropout)
         self.model = Model(inputs=[seed_input, gen_input], outputs=dec_outputs)
-        self.model.compile(loss='categorical_crossentropy', optimizer='adam')
+        self.model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
-
+    def _gen(self, seeds, targets, batch_size, steps):
+        '''
+        Helper method for batch generation.
+        :param seeds: An iterable of seeds, each represented as a string.
+        :param targets: An iterable of targets, each represented as a string.
+        :param batch_size: The size of the batch to be generated.
+        :return: A tuple ([X1, X2], y) where [X1, X2] is the input
+                 and y is the target of the batch.
+        '''
+        while True:
+            for i in range(steps):
+                X1, X2, y = list(), list(), list()
+                ignored = {}
+                for seed, target in zip(seeds, targets):
+                    seq = self.tokenizer.texts_to_sequences([target])[0]
+                    if seed in self.encoder.vocab:
+                        vec = self.encoder.encode(seed)[0]
+                        for i in range(1, len(seq)):
+                            in_seq = pad_sequences([seq[:i]], maxlen=self.max_length)[0]
+                            out_seq = to_categorical([seq[i]], num_classes=self.vocab_size)[0]
+                            X1.append(vec)
+                            X2.append(in_seq)
+                            y.append(out_seq)
+                            if len(X1) == batch_size:
+                                for k in ignored:
+                                    showwarning("Unable to encode seed '{}', "
+                                                "ignored {} instances"
+                                                .format(k, ignored[k]),
+                                                category=RuntimeWarning,
+                                                filename='decoder.py',
+                                                lineno=202)
+                                yield [np.array(X1), np.array(X2)], np.array(y)
+                                X1, X2, y = list(), list(), list()
+                    else:
+                        if seed in ignored:
+                            ignored[seed] += 1
+                        else:
+                            ignored[seed] = 1
 
 
 class Decoder_old():
@@ -271,3 +367,7 @@ class Decoder_old():
         :return: A summary of the model.
         '''
         return self.decoder_model.summary()
+
+
+
+#sdasdasdasddsdsdsdssdsd
