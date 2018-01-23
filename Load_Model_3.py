@@ -4,28 +4,32 @@ warnings.filterwarnings(action = 'ignore', category = UserWarning, module = 'gen
 warnings.filterwarnings(action = 'ignore', category = UserWarning, module = 'keras')
 from time import time
 from gensim.models.keyedvectors import KeyedVectors
+from gensim.models import Word2Vec
 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Activation, TimeDistributed
 from keras.preprocessing.text import Tokenizer, one_hot
 import numpy as np
 from keras.models import load_model, Sequential
-from keras.optimizers import RMSprop
 from keras.optimizers import Adam
 from keras.layers import Input
 from keras.layers.embeddings import Embedding
 from keras.layers import merge
 from keras.models import Model
+from keras.preprocessing.sequence import skipgrams
+from keras.preprocessing import sequence
 from keras.layers.merge import concatenate
 from keras.layers.normalization import BatchNormalization
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from Utils import *
-import sys
+from Skip_Grams import *
 
 ########################################## DIRECTORIES #################################################
 base_dir = "C:/Users/Carlos Peñaloza/Desktop/No-Backup Zone/RNN_With_Embeddings/"
 corpus = base_dir + "word2vec_model"
-nietzche_path = "C:/Users/Carlos Peñaloza/Desktop/No-Backup Zone/RNN_With_Embeddings/Nietzche/Nietzche.txt"
-text = open(nietzche_path).read().lower()
+nietzche = "C:/Users/Carlos Peñaloza/Desktop/No-Backup Zone/RNN_With_Embeddings/Nietzche/Nietzche.txt"
 
+text = open(nietzche).read().split()
+
+corpus2 = base_dir + "regular_model"
 ###################################### PARAMETERS #######################################
 vector_dimension = 300
 batch_size = 32
@@ -46,6 +50,7 @@ STAMP = 'lstm_%d_%d_%.2f_%.2f'%(number_of_lstm, number_of_dense, rate_drop_lstm,
 print("Loading...")
 begin = time()
 project_model = KeyedVectors.load_word2vec_format(corpus)
+project_regular_model = Word2Vec.load(corpus2)
 end = time()
 seconds = end - begin
 minutes = seconds / 60
@@ -58,93 +63,77 @@ print('\n'"%s word vectors of word2vec found" % len(project_model.vocab))
 ################################### EMBEDDING LAYER #######################################
 vocabulary_size = len(project_model.vocab)
 
-embedding_matrix = np.zeros((vocabulary_size, vector_dimension))
-for word in range(vocabulary_size):
-    if word in project_model.wv.vocab:
-        embedding_matrix[word] = project_model.word_vec(word)
-print('Null word embeddings: %d' % np.sum(np.sum(embedding_matrix, axis=1) == 0))
+embedding_matrix = np.zeros((len(project_model.wv.vocab), vector_dimension))
+for i in range(len(project_model.wv.vocab)):
+    embedding_vector = project_model.wv[project_model.wv.index2word[i]]
+    if embedding_vector is not None:
+        embedding_matrix[i] = embedding_vector
 
-chars = sorted(list(set(text)))
-print('total chars:', len(chars))
-char_indices = dict((c, i) for i, c in enumerate(chars))
-indices_char = dict((i, c) for i, c in enumerate(chars))
+# input words - in this case we do sample by sample evaluations of the similarity
+valid_word = Input((1,), dtype='int32')
+other_word = Input((1,), dtype='int32')
 
-# cut the text in semi-redundant sequences of maxlen characters
-maxlen = 40
-step = 3
-sentences = []
-next_chars = []
+# setup the embedding layer
+embeddings = Embedding(input_dim=vocabulary_size,   # embedding_matrix.shape[0] = 6833 -> the number of word2vec word vectors
+                                                    # in other words, the size of the vocabulary
+                       output_dim=vector_dimension, # embedding_matrix.shape[1] = 300 -> vector dimension, which is the
+                                                    # length of the vector we're gonna work with
+                       weights=[embedding_matrix])
 
-for i in range(0, len(text) - maxlen, step):
-    sentences.append(text[i: i + maxlen])
-    next_chars.append(text[i + maxlen])
-print('nb sequences:', len(sentences))
+embedded_a = embeddings(valid_word)
+embedded_b = embeddings(other_word)
+similarity = merge([embedded_a, embedded_b], mode='cos', dot_axes=2)
 
-print('Vectorization...')
-x = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.bool)
-y = np.zeros((len(sentences), len(chars)), dtype=np.bool)
+############################# KERAS MODEL ################################
+k_model = Model(input=[valid_word, other_word], output=similarity)
+#k_model.summary()
 
-for i, sentence in enumerate(sentences):
-    for t, char in enumerate(sentence):
-        x[i, t, char_indices[char]] = 1
-    y[i, char_indices[next_chars[i]]] = 1
+def get_sim(valid_word_idx, vocab_size):
+    sim = np.zeros((vocab_size,))
+    in_arr1 = np.zeros((1,))
+    in_arr2 = np.zeros((1,))
+    in_arr1[0,] = valid_word_idx
 
-# build the model: a single LSTM
-print('Build model...')
-model = Sequential()
-model.add(Embedding(input_dim=embedding_matrix.shape[0],
-                    output_dim=embedding_matrix.shape[1],
-                    weights=[embedding_matrix],
-                    input_length=max_sequence_length,
-                    trainable=False))
-model.add(LSTM(128, input_shape=(maxlen, len(chars))))
-model.add(Dense(len(chars)))
-model.add(Activation('softmax'))
-optimizer = RMSprop(lr=0.01)
-model.compile(loss='categorical_crossentropy', optimizer=optimizer)
+    for i in range(vocab_size):
+        in_arr2[0,] = i
+        out = k_model.predict_on_batch([in_arr1, in_arr2])
+        sim[i] = out
 
-def sample(preds, temperature=1.0):
-    # helper function to sample an index from a probability array
-    preds = np.asarray(preds).astype('float64')
-    preds = np.log(preds) / temperature
-    exp_preds = np.exp(preds)
-    preds = exp_preds / np.sum(exp_preds)
-    probas = np.random.multinomial(1, preds, 1)
-    return np.argmax(probas)
+        #print("PREDICTION:")
+        #prediction = k_model.predict([in_arr1, in_arr2], verbose=0)
+        #print(prediction)
 
-# train the model, output generated text after each iteration
-for iteration in range(1, 60):
+    return sim
 
-    print('Iteration', iteration)
-    model.fit(x, y, batch_size=128, epochs=1)
+def get_index_of_word(word):
+    index_of_word = project_model.vocab[word].index
+    return index_of_word
 
-    start_index = random.randint(0, len(text) - maxlen - 1)
 
-    for diversity in [0.2, 0.5, 1.0, 1.2]:
-        print()
-        print('----- diversity:', diversity)
+#######################################################################
+for i in range(1):
+    index_of_word = get_index_of_word("will")
+    valid_word = project_model.wv.index2word[index_of_word]
+    top_k = 3  # number of nearest neighbors
+    sim = get_sim(index_of_word, len(project_model.wv.vocab))
+    nearest = (-sim).argsort()[1:top_k + 1]
+    log_str = 'Nearest to %s:' % valid_word
 
-        generated = ''
-        sentence = text[start_index: start_index + maxlen]
-        generated += ""
-        print('----- Generating with seed: "' + sentence + '"')
-        print("RESULT: ")
-        sys.stdout.write(generated)
+    for k in range(top_k):
+        close_word = project_model.wv.index2word[nearest[k]]
+        log_str = '%s %s,' % (log_str, close_word)
 
-#############################################################################
+    #print(log_str)
 
-        for i in range(400):
-            x_pred = np.zeros((1, maxlen, len(chars))) #### code to change
-            for t, char in enumerate(sentence):
-                x_pred[0, t, char_indices[char]] = 1.
+#######################################################################
 
-            preds = model.predict(x_pred, verbose=0)[0]
-            next_index = sample(preds, diversity)
-            next_char = indices_char[next_index]
+#words_index = convert_data_to_index(text, project_model)
+#for i in range(10):
+#    print(text[i])
+#    print(words_index[i])
 
-            generated += next_char
-            sentence = sentence[1:] + next_char
+two_skip_bigrams = list(skipgrams(text, n=2, k=2))
+for item in two_skip_bigrams:
+    print(item)
 
-            sys.stdout.write(next_char)
-            sys.stdout.flush()
-print()
+#if you read hard it says something like: it is supposed to proved people with a substitute for religion
