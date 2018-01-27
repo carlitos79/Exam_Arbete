@@ -2,7 +2,9 @@ import string
 import codecs
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
+from encoder import MultiWordEncoder
 from decoder import Decoder
+from itertools import chain
 
 CHECK_MARK = u'\u2713'
 
@@ -53,12 +55,13 @@ def write_result(model, train_time, test_time, seeds, results, f_name):
     print(CHECK_MARK)
 
 
-def test_word2vec(source_path, target_paths, n_samples):
+def test_word2vec(n_samples, source_path, target_paths):
     '''
     Tests a decoder model with a word2vec encoder.
-    :param seeds: The seeds to test the model on.
     :param source_path: The path to the training data.
-    :param target_path: The paths to save the model to.
+    :param target_paths: A tuple of (root_path, weights_path) to
+                         save the trained model to.
+    :param n_samples: The number of samples to train on.
     '''
     _, topics, quotes = load_data(source_path, n_samples)
     print('Loading pre-trained word2vec model...', end='')
@@ -69,19 +72,20 @@ def test_word2vec(source_path, target_paths, n_samples):
     decoder = Decoder(encoder)
     print(CHECK_MARK)
     print('Fitting the decoder...')
-    decoder.fit_generator(topics, quotes, epochs=25, batch_size=32, trace=True)
+    decoder.fit_generator(topics, quotes, epochs=1, batch_size=32, trace=True)
     print('Fitting the decoder...' + CHECK_MARK)
     print('Saving model...', end='')
     decoder.save(target_paths)
     print(CHECK_MARK)
 
 
-def test_onehot(source_path, target_paths, n_samples):
+def test_onehot(n_samples, source_path, target_paths):
     '''
     Tests a decoder model with a one-hot encoder.
-    :param seeds: The seeds to test the model on.
     :param source_path: The path to the training data.
-    :param target_path: The paths to save the model to.
+    :param target_paths: A tuple of (root_path, weights_path) to
+                         save the trained model to.
+    :param n_samples: The number of samples to train on.
     '''
     _, topics, quotes = load_data(source_path, n_samples)
     print('Fitting the one-hot encoder...', end='')
@@ -92,8 +96,60 @@ def test_onehot(source_path, target_paths, n_samples):
     decoder = Decoder(encoder)
     print(CHECK_MARK)
     print('Fitting the decoder...')
-    decoder.fit_generator(topics, quotes, epochs=25, batch_size=32, trace=True)
+    decoder.fit_generator(topics, quotes, epochs=1, batch_size=32, trace=True)
     print('Fitting the decoder...' + CHECK_MARK)
     print('Saving model...', end='')
+    decoder.save(target_paths)
+    print(CHECK_MARK)
+
+
+def test_multihot(n_samples, source_path, target_paths):
+    '''
+    Tests a decoder model with a multi-hot encoder.
+    :param source_path: The path to the training data.
+    :param target_paths: A tuple of (root_path, weights_path) to
+                         save the trained model to.
+    :param n_samples: The number of samples to train on.
+    '''
+    _, _, quotes = load_data(source_path, n_samples)
+    print('Fitting the multi-hot encoder...', end='')
+    onehot_encoder = OneHotEncoder()
+    onehot_encoder.fit(list(chain(*[MultiWordEncoder._tokenize(q) for q in quotes])))
+    encoder = MultiWordEncoder(onehot_encoder, fn='add')
+    encoder.fit(quotes)
+    print(CHECK_MARK)
+    print('Initializing the decoder...', end='')
+    decoder = Decoder(encoder)
+    print(CHECK_MARK)
+    print('Fitting the decoder...')
+    decoder.fit_generator(quotes, quotes, epochs=1, batch_size=32, trace=True)
+    print('Fitting the decoder...' + CHECK_MARK)
+    print('Saving the model...', end='')
+    decoder.save(target_paths)
+    print(CHECK_MARK)
+
+
+def test_multiword2vec(n_samples, source_path, target_paths):
+    '''
+    Tests a decoder moddel based on a multi-word2vec encoder.
+    :param source_path: The path to the training data.
+    :param target_paths: A tuple of (root_path, weights_path) to
+                         save the trainedd model to.
+    :param n_samples: The number of samples to train on.
+    '''
+    _, _, quotes = load_data(source_path, n_samples)
+    print('Fitting the multi-word2vec encoder...', end='')
+    word2vec_encoder = Word2VecEncoder()
+    word2vec_encoder.load('pretrained.wv')
+    encoder = MultiWordEncoder(word2vec_encoder, fn='average')
+    encoder.fit(quotes)
+    print(CHECK_MARK)
+    print('Initializing the decoder...', end='')
+    decoder = Decoder(encoder)
+    print(CHECK_MARK)
+    print('Fitting the decoder...')
+    decoder.fit_generator(quotes, quotes, epochs=1, batch_size=32, trace=True)
+    print('Fitting the decoder...' + CHECK_MARK)
+    print('Saving the model...', end='')
     decoder.save(target_paths)
     print(CHECK_MARK)

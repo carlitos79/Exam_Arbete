@@ -1,4 +1,5 @@
 import math
+import encoder
 import numpy as np
 import keras.backend as K
 from keras.models import Model
@@ -96,7 +97,7 @@ class Decoder():
         sos_len = len(sos)
         eos = 'endseq'
         for seed in np.atleast_1d(seeds):
-            if seed in self.encoder.vocab:
+            if self.encoder.can_encode(seed):
                 vec = self.encoder.encode(seed)[0].reshape((1, self.encoder.size))
                 target = sos
                 for i in range(self.max_length):
@@ -168,7 +169,7 @@ class Decoder():
         Initializes the underlying model.
         :param vocab_size: Size of the vocabulary.
         '''
-        latent_dim = 256
+        latent_dim = 64
         seed_input = Input(shape=(self.encoder.size,))
         seed_dense = Dense(latent_dim, activation='relu')(seed_input)
         gen_input = Input(shape=(self.max_length,))
@@ -198,7 +199,7 @@ class Decoder():
                 ignored = {}
                 for seed, target in zip(seeds, targets):
                     seq = self.tokenizer.texts_to_sequences([target])[0]
-                    if seed in self.encoder.vocab:
+                    if self.encoder.can_encode(seed):
                         vec = self.encoder.encode(seed)[0]
                         for i in range(1, len(seq)):
                             in_seq = pad_sequences([seq[:i]], maxlen=self.max_length)[0]
@@ -367,7 +368,3 @@ class Decoder_old():
         :return: A summary of the model.
         '''
         return self.decoder_model.summary()
-
-
-
-#sdasdasdasddsdsdsdssdsd
