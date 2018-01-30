@@ -185,6 +185,8 @@ class Decoder():
         trained = None
         if os.path.isfile('trained_gen.hdf5'):
             gen_model = load_model('trained_gen.hdf5')
+            for layer in gen_model.layers:
+                layer.trainable = False
             gen_input = gen_model.input
             gen_output = gen_model.output
         else:
