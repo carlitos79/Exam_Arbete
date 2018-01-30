@@ -1,8 +1,8 @@
 import math
-import encoder
+import os
 import numpy as np
 import keras.backend as K
-from keras.models import Model
+from keras.models import Model, load_model
 from keras.layers import Input, LSTM, Dense, Dropout, Embedding
 from keras.layers.merge import add
 from keras.utils import plot_model
@@ -44,13 +44,16 @@ class Decoder():
         self.max_length = max(len(t.split()) for t in targets)
         self.vocab_size = len(self.tokenizer.word_index) + 1
 
+        trained = None
         if self.model is None:
-            self._init_model(self.vocab_size)
+            trained = self._init_model(self.vocab_size)
         steps = math.ceil((len(y) * self.max_length) / batch_size)
         self.model.fit_generator(self._gen(X, targets, batch_size, steps),
                                  epochs=epochs,
                                  verbose=trace,
                                  steps_per_epoch=steps)
+        if trained:
+            trained.save('trained_gen.hdf5')
 
     def fit(self, X, y, epochs=25, batch_size=32, trace=True):
         '''
@@ -135,13 +138,16 @@ class Decoder():
                         to save the model to.
         """
         self.model.save_weights(f_names[1])
-        temp = self.model
+        model = self.model
         self.model = None
+        encoder = self.encoder
+        self.encoder = None
         dump(self, open(f_names[0], 'wb'))
-        self.model = temp
+        self.model = model
+        self.encoder = encoder
 
     @staticmethod
-    def load(f_names):
+    def load(f_names, encoder):
         '''
         Loads a model from file.
         :param f_names: A tuple of paths (root_path, weights_path)
@@ -149,6 +155,7 @@ class Decoder():
         :return: The loaded model.
         '''
         dec = load(open(f_names[0], 'rb'))
+        dec.encoder = encoder
         dec._init_model(dec.vocab_size)
         dec.model.load_weights(f_names[1])
         return dec
@@ -164,25 +171,50 @@ class Decoder():
                 return word
         return None
 
-    def _init_model(self, vocab_size):
+    def _init_model(self, vocab_size, latent_dim=256):
         '''
         Initializes the underlying model.
         :param vocab_size: Size of the vocabulary.
         '''
-        latent_dim = 64
-        seed_input = Input(shape=(self.encoder.size,))
-        seed_dense = Dense(latent_dim, activation='relu')(seed_input)
-        gen_input = Input(shape=(self.max_length,))
-        gen_embed = Embedding(vocab_size, latent_dim, mask_zero=True)(
-            gen_input)
-        gen_lstm = LSTM(latent_dim)(gen_embed)
-        dec_inputs = add([seed_dense, gen_lstm])
-        dec_inputs_dropout = Dropout(0.2)(dec_inputs)
-        dec_dense = Dense(latent_dim, activation='relu')(dec_inputs_dropout)
-        dec_hidden_dropout = Dropout(0.5)(dec_dense)
-        dec_outputs = Dense(vocab_size, activation='softmax')(dec_hidden_dropout)
-        self.model = Model(inputs=[seed_input, gen_input], outputs=dec_outputs)
-        self.model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+        # build seed model
+        seed_input = Input(shape=(self.encoder.size,), name='seed_input')
+        seed_dropout = Dropout(0.5, name='seed_dropout')(seed_input)
+        seed_dense = Dense(latent_dim, activation='relu', name='seed_dense')(seed_dropout)
+
+        # load pre-trained model if one exists
+        trained = None
+        if os.path.isfile('trained_gen.hdf5'):
+            gen_model = load_model('trained_gen.hdf5')
+            gen_input = gen_model.input
+            gen_output = gen_model.output
+        else:
+            gen_input = Input(shape=(self.max_length,), name='gen_input')
+            gen_embed = Embedding(vocab_size,
+                                  latent_dim,
+                                  mask_zero=True,
+                                  name='gen_embed')(gen_input)
+            gen_dropout = Dropout(0.5, name='gen_dropout')(gen_embed)
+            gen_lstm = LSTM(latent_dim, name='gen_lstm')(gen_dropout)
+            gen_model = Model(inputs=gen_input,
+                              outputs=gen_lstm,
+                              name='gen_model')
+            gen_output = gen_model.output
+            trained = gen_model
+
+        # build multi-modal model
+        dec_input = add([seed_dense, gen_output], name='dec_input')
+        dec_dense = Dense(latent_dim,
+                          activation='relu',
+                          name='dec_dense')(dec_input)
+        dec_output = Dense(vocab_size,
+                           activation='softmax',
+                           name='dec_output')(dec_dense)
+        self.model = Model(inputs=[seed_input, gen_input],
+                           outputs=dec_output,
+                           name='multimodal_model')
+        self.model.compile(loss='categorical_crossentropy', optimizer='adam')
+
+        return trained
 
     def _gen(self, seeds, targets, batch_size, steps):
         '''
@@ -194,36 +226,31 @@ class Decoder():
                  and y is the target of the batch.
         '''
         while True:
-            for i in range(steps):
-                X1, X2, y = list(), list(), list()
-                ignored = {}
-                for seed, target in zip(seeds, targets):
-                    seq = self.tokenizer.texts_to_sequences([target])[0]
-                    if self.encoder.can_encode(seed):
-                        vec = self.encoder.encode(seed)[0]
-                        for i in range(1, len(seq)):
-                            in_seq = pad_sequences([seq[:i]], maxlen=self.max_length)[0]
-                            out_seq = to_categorical([seq[i]], num_classes=self.vocab_size)[0]
-                            X1.append(vec)
-                            X2.append(in_seq)
-                            y.append(out_seq)
-                            if len(X1) == batch_size:
-                                for k in ignored:
-                                    showwarning("Unable to encode seed '{}', "
-                                                "ignored {} instances"
-                                                .format(k, ignored[k]),
-                                                category=RuntimeWarning,
-                                                filename='decoder.py',
-                                                lineno=202)
-                                yield [np.array(X1), np.array(X2)], np.array(y)
-                                X1, X2, y = list(), list(), list()
-                    else:
-                        if seed in ignored:
-                            ignored[seed] += 1
-                        else:
-                            ignored[seed] = 1
+            #for i in range(steps):
+            X1 = np.zeros((batch_size, self.encoder.size))
+            X2 = np.zeros((batch_size, self.max_length))
+            y = np.zeros((batch_size, self.vocab_size))
+            sz = 0
+            #X1, X2, y = list(), list(), list()
+            for seed, target in zip(seeds, targets):
+                seq = self.tokenizer.texts_to_sequences([target])[0]
+                if self.encoder.can_encode(seed):
+                    vec = self.encoder.encode(seed)[0]
+                    for i in range(1, len(seq)):
+                        in_seq = pad_sequences([seq[:i]], maxlen=self.max_length)[0]
+                        out_seq = to_categorical([seq[i]], num_classes=self.vocab_size)[0]
+                        X1[sz] = vec
+                        X2[sz] = in_seq
+                        y[sz] = out_seq
+                        sz += 1
+                        #X1.append(vec)
+                        #X2.append(in_seq)
+                        #y.append(out_seq)
+                        if sz == batch_size:
+                            yield [np.array(X1), np.array(X2)], np.array(y)
+                            sz = 0
 
-
+"""
 class Decoder_old():
     '''
     Class representing the concept of a decoder capable of performing
@@ -368,3 +395,4 @@ class Decoder_old():
         :return: A summary of the model.
         '''
         return self.decoder_model.summary()
+"""

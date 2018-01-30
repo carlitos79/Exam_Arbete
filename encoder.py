@@ -27,6 +27,8 @@ class Encoder():
     '''
     Abstract class representing the concept of an encoder.
     '''
+    def __repr__(self):
+        return self.__class__.__name__
 
     def encode(self, X):
         '''
@@ -49,18 +51,6 @@ class Encoder():
                                   'has not been implemented'
                                   .format(self.__class__.__name__,
                                           self.can_encode.__name__))
-
-    def save(self, f_name):
-        raise NotImplementedError('abstract method {}.{} '
-                                  'has not been implemented'
-                                  .format(self.__class__.__name__,
-                                          self.load.__name__))
-
-    def load(self, f_name):
-        raise NotImplementedError('abstract method {}.{} '
-                                  'has not been implemented'
-                                  .format(self.__class__.__name__,
-                                          self.load.__name__))
 
     @property
     def size(self):
@@ -191,34 +181,56 @@ class OneHotEncoder(Encoder):
 
 
 class MultiWordEncoder(Encoder):
-    def __init__(self, word_encoder=None, fn='add'):
-        self.lda_model = None
+    def __init__(self, word_encoder, topic_model, fn='add'):
         self.word_encoder = word_encoder
+        self.topic_model = topic_model
         self.fn = fn
 
-    def fit(self, X, *args, **kwargs):
-        texts = [self._tokenize(x) for x in X]
-        dictionary = corpora.Dictionary(texts)
-        corpus = [dictionary.doc2bow(t) for t in texts]
-        self.lda_model = LdaModel(corpus, id2word=dictionary, *args, **kwargs)
-
     def encode(self, X):
+        topics = self.topic_model.predict(X)
         res = []
-        for x in np.atleast_1d(X):
-            tokens = self._tokenize(x)
-            topic = self.lda_model[self.lda_model.id2word.doc2bow(tokens)][0][0]
-            word_ids = [w for w, _ in self.lda_model.get_topic_terms(topic)]
-            words = [self.lda_model.id2word.id2token[i] for i in word_ids]
+        for t in topics:
             vecs = []
-            for w in words:
+            for w in t:
                 if self.word_encoder.can_encode(w):
                     vecs.append(self.word_encoder.encode(w)[0])
             res.append(sum(vecs) if self.fn == 'add'
                        else sum(vecs) / len(vecs))
         return np.array(res)
 
+    def can_encode(self, seed):
+        for t in self.topic_model.tokenize(seed):
+            if self.word_encoder.can_encode(t):
+                return True
+        return False
+
+    @property
+    def size(self):
+        return self.word_encoder.size
+
+
+class TopicModel():
+    def __init__(self):
+        self.model = None
+
+    def fit(self, X, *args, **kwargs):
+        texts = [self.tokenize(x) for x in X]
+        dictionary = corpora.Dictionary(texts)
+        corpus = [dictionary.doc2bow(t) for t in texts]
+        self.model = LdaModel(corpus, id2word=dictionary, *args, **kwargs)
+
+    def predict(self, X):
+        res = []
+        for x in np.atleast_1d(X):
+            tokens = self.tokenize(x)
+            topic = self.model[self.model.id2word.doc2bow(tokens)][0][0]
+            terms = [w for w, _ in self.model.get_topic_terms(topic)]
+            words = [self.model.id2word.id2token[i] for i in terms]
+            res.append(words)
+        return res
+
     @staticmethod
-    def _tokenize(text):
+    def tokenize(text):
         tokenizer = RegexpTokenizer(r'\w+')
         en_stop = get_stop_words('en')
         p_stemmer = PorterStemmer()
@@ -229,21 +241,10 @@ class MultiWordEncoder(Encoder):
         return stemmed_tokens
 
     def save(self, f_name):
-        pickle.dump([self.lda_model, self.fn], open(f_name, 'wb'))
+        self.model.save('trained_lda.lda')
 
     def load(self, f_name):
-        self.lda_model, self.fn = pickle.load(open(f_name, 'rb'))
-
-    def can_encode(self, seed):
-        for t in self._tokenize(seed):
-            if self.word_encoder.can_encode(t):
-                return True
-        return False
-
-    @property
-    def size(self):
-        return self.word_encoder.size
-
+        self.model = LdaModel.load(f_name)
 
 
 

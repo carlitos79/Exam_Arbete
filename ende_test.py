@@ -1,39 +1,54 @@
+import os
 import string
 import codecs
+import pickle
+from collections import defaultdict
 from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
 from encoder import MultiWordEncoder
+from encoder import TopicModel
 from decoder import Decoder
-from itertools import chain
+
 
 CHECK_MARK = u'\u2713'
 
 
-def load_data(f_name, n_samples):
+def load_data(f_name, sample_size):
     '''
-    Loads the data in the specified file.
-    :param f_name: The filename of the data location.
-    :return: Three lists: sentiments, topics, quotes
+    Loads data from the specified file.
+    :param f_name: The source file of the data.
+    :param sample_size: The percentage of samples to draw.
+    :return: Three tuples: sentiments, topics & quotes.
     '''
-    print('Reading data from file...', end='')
+    print('Reading data from file...', end='', flush=True)
     with codecs.open(f_name, encoding='utf-8') as f:
         lines = f.read().split('\n')
-    if n_samples != 'all':
-        lines = lines[:n_samples]
     sentiments, topics, quotes = zip(*[(s,t,q) for s,t,q in
                                        [l.split(';;') for l in lines]])
-    print(CHECK_MARK)
-    print('Pre-processing data...', end='')
+    print(CHECK_MARK, flush=True)
+
+    print('Pre-processing data...', end='', flush=True)
     sentiments = [1 if s == 'positive'
                   else -1 if s == 'negative' else 0
                   for s in sentiments]
     table = str.maketrans('', '', string.punctuation)
     quotes = [' '.join([w.lower().translate(table) for w in q.split()])
               for q in quotes]
-    print(CHECK_MARK)
-    return sentiments, topics, quotes
+    print(CHECK_MARK, flush=True)
 
+    print('Sampling data...', end='', flush=True)
+    data_dict = defaultdict(list)
+    for t, q, s in zip(topics, quotes, sentiments):
+        data_dict[t].append((s, t, q))
+    data_set = []
+    for k in data_dict.keys():
+        for e in data_dict[k][:int(len(data_dict[k]) * sample_size)]:
+            data_set.append(e)
+    print(CHECK_MARK, flush=True)
 
+    return zip(*data_set)
+
+"""
 def write_result(model, train_time, test_time, seeds, results, f_name):
     '''
     Writes the result of a test.
@@ -53,103 +68,239 @@ def write_result(model, train_time, test_time, seeds, results, f_name):
             f.write(form_str.format(s, r))
         f.write('\n' + '-'*100 + '\n')
     print(CHECK_MARK)
+"""
 
 
-def test_word2vec(n_samples, source_path, target_paths):
+def test_word2vec(sample_size,
+                  epochs,
+                  batch_size,
+                  data_path,
+                  word2vec_filename,
+                  dec_filenames):
+
     '''
-    Tests a decoder model with a word2vec encoder.
-    :param source_path: The path to the training data.
-    :param target_paths: A tuple of (root_path, weights_path) to
-                         save the trained model to.
-    :param n_samples: The number of samples to train on.
+    Tests a decoder based on a word2vec encoder.
+    :param sample_size: The percentage of data to train on.
+    :param epochs: The number of epochs to train on.
+    :param batch_size: The size of each batch.
+    :param data_path: The path to the data.
+    :param word2vec_filename: Source or target for the word2vec resource.
+    :param dec_filenames: Two filenames (root, weights) for the decoder resource.
     '''
-    _, topics, quotes = load_data(source_path, n_samples)
-    print('Loading pre-trained word2vec model...', end='')
+    _, topics, quotes = load_data(data_path, sample_size)
+
     encoder = Word2VecEncoder()
-    encoder.load('pretrained.wv')
-    print(CHECK_MARK)
-    print('Initializing the decoder...', end='')
+    if os.path.isfile(word2vec_filename):
+        print('Loading the word2vec encoder...', end='', flush=True)
+        encoder.load(word2vec_filename)
+        print(CHECK_MARK, flush=True)
+    else:
+        print('Fitting the word2vec encoder...', end='', flush=True)
+        encoder.fit(topics)
+        print(CHECK_MARK, flush=True)
+
+    print('Initializing the decoder...', end='', flush=True)
     decoder = Decoder(encoder)
     print(CHECK_MARK)
-    print('Fitting the decoder...')
-    decoder.fit_generator(topics, quotes, epochs=1, batch_size=32, trace=True)
-    print('Fitting the decoder...' + CHECK_MARK)
-    print('Saving model...', end='')
-    decoder.save(target_paths)
-    print(CHECK_MARK)
+    print('Fitting the decoder...', flush=True)
+    decoder.fit_generator(topics,
+                          quotes,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          trace=True)
+    print('Fitting the decoder...' + CHECK_MARK, flush=True)
+
+    print('Saving the decoder...', end='', flush=True)
+    decoder.save(dec_filenames)
+    print(CHECK_MARK, flush=True)
+
+    if not os.path.isfile(word2vec_filename):
+        print('Saving the encoder...', end='', flush=True)
+        encoder.save(word2vec_filename)
+        print(CHECK_MARK, flush=True)
 
 
-def test_onehot(n_samples, source_path, target_paths):
+def test_onehot(sample_size,
+                epochs,
+                batch_size,
+                data_path,
+                onehot_filename,
+                dec_filenames):
     '''
-    Tests a decoder model with a one-hot encoder.
-    :param source_path: The path to the training data.
-    :param target_paths: A tuple of (root_path, weights_path) to
-                         save the trained model to.
-    :param n_samples: The number of samples to train on.
+    Tests a decoder based on a word2vec encoder.
+    :param sample_size: The percentage of data to train on.
+    :param epochs: The number of epochs to train on.
+    :param batch_size: The size of each batch.
+    :param data_path: The path to the data.
+    :param onehot_filename: Source or target for the one-hot resource.
+    :param dec_filenames: Two filenames (root, weights) for the decoder resource.
     '''
-    _, topics, quotes = load_data(source_path, n_samples)
-    print('Fitting the one-hot encoder...', end='')
+    _, topics, quotes = load_data(data_path, sample_size)
+
     encoder = OneHotEncoder()
-    encoder.fit(topics)
-    print(CHECK_MARK)
-    print('Initializing the decoder...', end='')
+    if os.path.isfile(onehot_filename):
+        print('Loading the one-hot encoder...', end='', flush=True)
+        encoder.load(onehot_filename)
+        print(CHECK_MARK, flush=True)
+    else:
+        print('Fitting the one-hot encoder...', end='', flush=True)
+        encoder.fit(topics)
+        print(CHECK_MARK, flush=True)
+
+    print('Initializing the decoder...', end='', flush=True)
     decoder = Decoder(encoder)
-    print(CHECK_MARK)
-    print('Fitting the decoder...')
-    decoder.fit_generator(topics, quotes, epochs=1, batch_size=32, trace=True)
-    print('Fitting the decoder...' + CHECK_MARK)
-    print('Saving model...', end='')
-    decoder.save(target_paths)
-    print(CHECK_MARK)
+    print(CHECK_MARK, flush=True)
+    print('Fitting the decoder...', flush=True)
+    decoder.fit_generator(topics,
+                          quotes,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          trace=True)
+    print('Fitting the decoder...' + CHECK_MARK, flush=True)
+
+    print('Saving the decoder...', end='', flush=True)
+    decoder.save(dec_filenames)
+    print(CHECK_MARK, flush=True)
+
+    if not os.path.isfile(onehot_filename):
+        print('Saving the encoder...', end='', flush=True)
+        pickle.dump(encoder, onehot_filename)
+        print(CHECK_MARK, flush=True)
 
 
-def test_multihot(n_samples, source_path, target_paths):
+def test_multihot(sample_size,
+                  epochs,
+                  batch_size,
+                  data_path,
+                  onehot_filename,
+                  topic_filename,
+                  dec_filenames):
     '''
-    Tests a decoder model with a multi-hot encoder.
-    :param source_path: The path to the training data.
-    :param target_paths: A tuple of (root_path, weights_path) to
-                         save the trained model to.
-    :param n_samples: The number of samples to train on.
+    Tests a decoder based on a word2vec encoder.
+    :param sample_size: The percentage of data to train on.
+    :param epochs: The number of epochs to train on.
+    :param batch_size: The size of each batch.
+    :param data_path: The path to the data.
+    :param onehot_filename: Source or target for the one-hot resource.
+    :param topic_filename: Source or target for the topic model resource.
+    :param dec_filenames: Two filenames (root, weights) for the decoder resource.
     '''
-    _, _, quotes = load_data(source_path, n_samples)
-    print('Fitting the multi-hot encoder...', end='')
+    _, _, quotes = load_data(data_path, sample_size)
+
+    topic_model = TopicModel()
+    if os.path.isfile(topic_filename):
+        print('Loading the topic model...', end='', flush=True)
+        topic_model.load(topic_filename)
+        print(CHECK_MARK, flush=True)
+    else:
+        print('Fitting the topic model...', end='', flush=True)
+        topic_model.fit(quotes)
+        print(CHECK_MARK, flush=True)
+
     onehot_encoder = OneHotEncoder()
-    onehot_encoder.fit(list(chain(*[MultiWordEncoder._tokenize(q) for q in quotes])))
-    encoder = MultiWordEncoder(onehot_encoder, fn='add')
-    encoder.fit(quotes)
-    print(CHECK_MARK)
-    print('Initializing the decoder...', end='')
+    if os.path.isfile(onehot_filename):
+        print('Loading the one-hot encoder...', end='', flush=True)
+        onehot_encoder.load(onehot_filename)
+        print(CHECK_MARK, flush=True)
+    else:
+        print('Fitting the one-hot encoder...', end='', flush=True)
+        onehot_encoder.fit([topic_model.tokenize(q) for q in quotes])
+        print(CHECK_MARK, flush=True)
+
+    print('Initializing the multi-hot encoder...', end='', flush=True)
+    encoder = MultiWordEncoder(onehot_encoder, topic_model, fn='add')
+    print(CHECK_MARK, flush=True)
+
+    print('Initializing the decoder...', end='', flush=True)
     decoder = Decoder(encoder)
-    print(CHECK_MARK)
-    print('Fitting the decoder...')
-    decoder.fit_generator(quotes, quotes, epochs=1, batch_size=32, trace=True)
-    print('Fitting the decoder...' + CHECK_MARK)
-    print('Saving the model...', end='')
-    decoder.save(target_paths)
-    print(CHECK_MARK)
+    print(CHECK_MARK, flush=True)
+    print('Fitting the decoder...', flush=True)
+    decoder.fit_generator(quotes,
+                          quotes,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          trace=True)
+    print('Fitting the decoder...' + CHECK_MARK, flush=True)
+
+    print('Saving the decoder...', end='', flush=True)
+    decoder.save(dec_filenames)
+    print(CHECK_MARK, flush=True)
+
+    if not os.path.isfile(onehot_filename):
+        print('Saving the one-hot encoder...', end='', flush=True)
+        pickle.dump(onehot_encoder, onehot_filename)
+        print(CHECK_MARK, flush=True)
+
+    if not os.path.isfile(topic_filename):
+        print('Saving topic model...', end='', flush=True)
+        topic_model.save(topic_filename)
+        print(CHECK_MARK, flush=True)
 
 
-def test_multiword2vec(n_samples, source_path, target_paths):
+def test_multiword2vec(sample_size,
+                       epochs,
+                       batch_size,
+                       data_path,
+                       word2vec_filename,
+                       topic_filename,
+                       dec_filenames):
     '''
-    Tests a decoder moddel based on a multi-word2vec encoder.
-    :param source_path: The path to the training data.
-    :param target_paths: A tuple of (root_path, weights_path) to
-                         save the trainedd model to.
-    :param n_samples: The number of samples to train on.
+    Tests a decoder based on a word2vec encoder.
+    :param sample_size: The percentage of data to train on.
+    :param epochs: The number of epochs to train on.
+    :param batch_size: The size of each batch.
+    :param data_path: The path to the data.
+    :param word2vec_filename: Source or target for the word2vec resource.
+    :param topic_filename: Source or target for the topic model resource.
+    :param dec_filenames: Two filenames (root, weights) for the decoder resource.
     '''
-    _, _, quotes = load_data(source_path, n_samples)
-    print('Fitting the multi-word2vec encoder...', end='')
+    _, _, quotes = load_data(data_path, sample_size)
+
+    topic_model = TopicModel()
+    if os.path.isfile(topic_filename):
+        print('Loading the topic model...', end='')
+        topic_model.load(topic_filename)
+        print(CHECK_MARK)
+    else:
+        print('Fitting the topic model...', end='')
+        topic_model.fit(quotes)
+        print(CHECK_MARK)
+
     word2vec_encoder = Word2VecEncoder()
-    word2vec_encoder.load('pretrained.wv')
-    encoder = MultiWordEncoder(word2vec_encoder, fn='average')
-    encoder.fit(quotes)
+    if os.path.isfile(word2vec_filename):
+        print('Loading the word2vec encoder...', end='')
+        word2vec_encoder.load(word2vec_filename)
+        print(CHECK_MARK)
+    else:
+        print('Fitting the word2vec encoder...', end='')
+        word2vec_encoder.fit([topic_model.tokenize(q) for q in quotes])
+        print(CHECK_MARK)
+
+    print('Initializing the multi-word2vec encoder...', end='')
+    encoder = MultiWordEncoder(word2vec_encoder, topic_model, fn='average')
     print(CHECK_MARK)
+
     print('Initializing the decoder...', end='')
     decoder = Decoder(encoder)
     print(CHECK_MARK)
     print('Fitting the decoder...')
-    decoder.fit_generator(quotes, quotes, epochs=1, batch_size=32, trace=True)
+    decoder.fit_generator(quotes,
+                          quotes,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          trace=True)
     print('Fitting the decoder...' + CHECK_MARK)
-    print('Saving the model...', end='')
-    decoder.save(target_paths)
+
+    print('Saving the decoder...', end='')
+    decoder.save(dec_filenames)
     print(CHECK_MARK)
+
+    if not os.path.isfile(word2vec_filename):
+        print('Saving the word2vec encoder...', end='')
+        pickle.dump(word2vec_encoder, word2vec_filename)
+        print(CHECK_MARK)
+
+    if not os.path.isfile(topic_filename):
+        print('Saving topic model...', end='')
+        topic_model.save(topic_filename)
+        print(CHECK_MARK)
