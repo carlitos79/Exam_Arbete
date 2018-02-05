@@ -223,7 +223,12 @@ class TopicModel():
         res = []
         for x in np.atleast_1d(X):
             tokens = self.tokenize(x)
-            topic = self.model[self.model.id2word.doc2bow(tokens)][0][0]
+            topic = 0
+            try:
+                topic = self.model[self.model.id2word.doc2bow(tokens)][0][0]
+            except IndexError as e:
+                print('x: ' + str(x))
+                print('tokens: ' + str(tokens))
             terms = [w for w, _ in self.model.get_topic_terms(topic)]
             words = [self.model.id2word.id2token[i] for i in terms]
             res.append(words)
@@ -241,7 +246,7 @@ class TopicModel():
         return stemmed_tokens
 
     def save(self, f_name):
-        self.model.save('trained_lda.lda')
+        self.model.save(f_name)
 
     def load(self, f_name):
         self.model = LdaModel.load(f_name)

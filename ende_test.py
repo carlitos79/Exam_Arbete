@@ -23,6 +23,7 @@ def load_data(f_name, sample_size):
     print('Reading data from file...', end='', flush=True)
     with codecs.open(f_name, encoding='utf-8') as f:
         lines = f.read().split('\n')
+    lines = lines[:9116] + lines[9117:]
     sentiments, topics, quotes = zip(*[(s,t,q) for s,t,q in
                                        [l.split(';;') for l in lines]])
     print(CHECK_MARK, flush=True)
@@ -163,8 +164,9 @@ def test_onehot(sample_size,
     print(CHECK_MARK, flush=True)
 
     if not os.path.isfile(onehot_filename):
-        print('Saving the encoder...', end='', flush=True)
-        pickle.dump(encoder, onehot_filename)
+        print('Saving the one-hot encoder...', end='', flush=True)
+        with open(onehot_filename, 'wb') as f:
+            pickle.dump(encoder, f)
         print(CHECK_MARK, flush=True)
 
 
@@ -228,7 +230,8 @@ def test_multihot(sample_size,
 
     if not os.path.isfile(onehot_filename):
         print('Saving the one-hot encoder...', end='', flush=True)
-        pickle.dump(onehot_encoder, onehot_filename)
+        with open(onehot_filename, 'wb') as f:
+            pickle.dump(onehot_encoder, f)
         print(CHECK_MARK, flush=True)
 
     if not os.path.isfile(topic_filename):
@@ -297,7 +300,8 @@ def test_multiword2vec(sample_size,
 
     if not os.path.isfile(word2vec_filename):
         print('Saving the word2vec encoder...', end='')
-        pickle.dump(word2vec_encoder, word2vec_filename)
+        with open(word2vec_filename, 'wb') as f:
+            pickle.dump(word2vec_encoder, f)
         print(CHECK_MARK)
 
     if not os.path.isfile(topic_filename):
