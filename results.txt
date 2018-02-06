@@ -20,3 +20,14 @@ architecture --> i think the building has integrity have a very religious family
 attitude     --> i think the attraction of american idol is about the basic early age
 
 ---------------------------------------------------------------------------------------------------
+Results from decoder(word2vec_test):
+
+Training time: 0
+Testing time: 0
+
+age          -->  i am enormously honored to watch the age of putting on the variety of others if you are that we are to get at the age of delegate to get at the age
+amazing      -->  i am thankful to the variety there is so much by the certain time haircut i was taught to get by the head haircut i was taught to get by the head haircut i was taught to get by the head haircut i was taught to get by the head haircut i was taught to get by the head haircut i was taught to get by the head haircut i was taught to get by the head haircut i
+architecture -->  the truth is that i had expected to choose at the time behind the room behind the way they are to choose or leave a big idea
+attitude     -->  i had to be a little thing for the attitude and its a major wide per hole to looked to take him hours if you please out 50 major kind of race sex kind of own race towards her character
+
+----------------------------------------------------------------------------------------------------

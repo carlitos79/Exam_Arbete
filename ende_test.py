@@ -8,6 +8,7 @@ from encoder import OneHotEncoder
 from encoder import MultiWordEncoder
 from encoder import TopicModel
 from decoder import Decoder
+from itertools import chain
 
 
 CHECK_MARK = u'\u2713'
@@ -206,7 +207,7 @@ def test_multihot(sample_size,
         print(CHECK_MARK, flush=True)
     else:
         print('Fitting the one-hot encoder...', end='', flush=True)
-        onehot_encoder.fit([topic_model.tokenize(q) for q in quotes])
+        onehot_encoder.fit(list(set(chain(*[topic_model.tokenize(q) for q in quotes]))))
         print(CHECK_MARK, flush=True)
 
     print('Initializing the multi-hot encoder...', end='', flush=True)
@@ -261,50 +262,50 @@ def test_multiword2vec(sample_size,
 
     topic_model = TopicModel()
     if os.path.isfile(topic_filename):
-        print('Loading the topic model...', end='')
+        print('Loading the topic model...', end='', flush=True)
         topic_model.load(topic_filename)
-        print(CHECK_MARK)
+        print(CHECK_MARK, flush=True)
     else:
-        print('Fitting the topic model...', end='')
+        print('Fitting the topic model...', end='', flush=True)
         topic_model.fit(quotes)
-        print(CHECK_MARK)
+        print(CHECK_MARK, flush=True)
 
     word2vec_encoder = Word2VecEncoder()
     if os.path.isfile(word2vec_filename):
-        print('Loading the word2vec encoder...', end='')
+        print('Loading the word2vec encoder...', end='', flush=True)
         word2vec_encoder.load(word2vec_filename)
-        print(CHECK_MARK)
+        print(CHECK_MARK, flush=True)
     else:
-        print('Fitting the word2vec encoder...', end='')
+        print('Fitting the word2vec encoder...', end='', flush=True)
         word2vec_encoder.fit([topic_model.tokenize(q) for q in quotes])
-        print(CHECK_MARK)
+        print(CHECK_MARK, flush=True)
 
-    print('Initializing the multi-word2vec encoder...', end='')
+    print('Initializing the multi-word2vec encoder...', end='', flush=True)
     encoder = MultiWordEncoder(word2vec_encoder, topic_model, fn='average')
-    print(CHECK_MARK)
+    print(CHECK_MARK, flush=True)
 
-    print('Initializing the decoder...', end='')
+    print('Initializing the decoder...', end='', flush=True)
     decoder = Decoder(encoder)
-    print(CHECK_MARK)
-    print('Fitting the decoder...')
+    print(CHECK_MARK, flush=True)
+    print('Fitting the decoder...', flush=True)
     decoder.fit_generator(quotes,
                           quotes,
                           epochs=epochs,
                           batch_size=batch_size,
                           trace=True)
-    print('Fitting the decoder...' + CHECK_MARK)
+    print('Fitting the decoder...' + CHECK_MARK, flush=True)
 
-    print('Saving the decoder...', end='')
+    print('Saving the decoder...', end='', flush=True)
     decoder.save(dec_filenames)
-    print(CHECK_MARK)
+    print(CHECK_MARK, flush=True)
 
     if not os.path.isfile(word2vec_filename):
-        print('Saving the word2vec encoder...', end='')
+        print('Saving the word2vec encoder...', end='', flush=True)
         with open(word2vec_filename, 'wb') as f:
             pickle.dump(word2vec_encoder, f)
-        print(CHECK_MARK)
+        print(CHECK_MARK, flush=True)
 
     if not os.path.isfile(topic_filename):
-        print('Saving topic model...', end='')
+        print('Saving topic model...', end='', flush=True)
         topic_model.save(topic_filename)
-        print(CHECK_MARK)
+        print(CHECK_MARK, flush=True)
