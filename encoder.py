@@ -252,6 +252,22 @@ class TopicModel():
         self.model = LdaModel.load(f_name)
 
 
+class SentimentEncoder(Encoder):
+    def __init__(self, word_encoder):
+        self.word_encoder = word_encoder
+
+    def encode(self, X):
+        X = np.atleast_2d(X)
+        return np.c_[X[:,0], self.word_encoder.encode(X[:,1])]
+
+    def can_encode(self, seed):
+        return self.word_encoder.can_encode(seed[1])
+
+    @property
+    def size(self):
+        return self.word_encoder.size + 1
+
+
 
 
 

@@ -7,6 +7,7 @@ from encoder import Word2VecEncoder
 from encoder import OneHotEncoder
 from encoder import MultiWordEncoder
 from encoder import TopicModel
+from encoder import SentimentEncoder
 from decoder import Decoder
 from itertools import chain
 
@@ -309,3 +310,46 @@ def test_multiword2vec(sample_size,
         print('Saving topic model...', end='', flush=True)
         topic_model.save(topic_filename)
         print(CHECK_MARK, flush=True)
+
+
+def test_sentiment(sample_size,
+                   epochs,
+                   batch_size,
+                   data_path,
+                   word2vec_filename,
+                   dec_filenames):
+    sentiments, topics, quotes = load_data(data_path, sample_size)
+
+    w2v = Word2VecEncoder()
+    if os.path.isfile(word2vec_filename):
+        print('Loading the word2vec encoder...', end='', flush=True)
+        w2v.load(word2vec_filename)
+        print(CHECK_MARK, flush=True)
+    else:
+        print('Fitting the word2vec encoder...', end='', flush=True)
+        w2v.fit(topics)
+        print(CHECK_MARK, flush=True)
+    encoder = SentimentEncoder(w2v)
+
+    print('Initializing the decoder...', end='', flush=True)
+    decoder = Decoder(encoder)
+    print(CHECK_MARK)
+    print('Fitting the decoder...', flush=True)
+    decoder.fit_generator(zip(sentiments, topics),
+                          quotes,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          trace=True)
+    print('Fitting the decoder...' + CHECK_MARK, flush=True)
+
+    print('Saving the decoder...', end='', flush=True)
+    decoder.save(dec_filenames)
+    print(CHECK_MARK, flush=True)
+
+    if not os.path.isfile(word2vec_filename):
+        print('Saving the encoder...', end='', flush=True)
+        w2v.save(word2vec_filename)
+        print(CHECK_MARK, flush=True)
+
+
+
