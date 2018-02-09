@@ -335,7 +335,7 @@ def test_sentiment(sample_size,
     decoder = Decoder(encoder)
     print(CHECK_MARK)
     print('Fitting the decoder...', flush=True)
-    decoder.fit_generator(zip(sentiments, topics),
+    decoder.fit_generator([z for z in zip(sentiments, topics)],
                           quotes,
                           epochs=epochs,
                           batch_size=batch_size,
@@ -352,4 +352,42 @@ def test_sentiment(sample_size,
         print(CHECK_MARK, flush=True)
 
 
+def test_sentiment2(sample_size,
+                   epochs,
+                   batch_size,
+                   data_path,
+                   oh_filename,
+                   dec_filenames):
+    sentiments, topics, quotes = load_data(data_path, sample_size)
+
+    oh = OneHotEncoder()
+    if os.path.isfile(oh_filename):
+        print('Loading the oh encoder...', end='', flush=True)
+        oh = pickle.load(open(oh_filename, 'rb'))
+        print(CHECK_MARK, flush=True)
+    else:
+        print('Fitting the oh encoder...', end='', flush=True)
+        oh.fit(topics)
+        print(CHECK_MARK, flush=True)
+    encoder = SentimentEncoder(oh)
+
+    print('Initializing the decoder...', end='', flush=True)
+    decoder = Decoder(encoder)
+    print(CHECK_MARK)
+    print('Fitting the decoder...', flush=True)
+    decoder.fit_generator([z for z in zip(sentiments, topics)],
+                          quotes,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          trace=True)
+    print('Fitting the decoder...' + CHECK_MARK, flush=True)
+
+    print('Saving the decoder...', end='', flush=True)
+    decoder.save(dec_filenames)
+    print(CHECK_MARK, flush=True)
+
+    if not os.path.isfile(oh):
+        print('Saving the encoder...', end='', flush=True)
+        pickle.dump(oh, open(oh_filename, 'wb'))
+        print(CHECK_MARK, flush=True)
 
