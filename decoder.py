@@ -99,7 +99,7 @@ class Decoder():
         sos = 'startseq'
         sos_len = len(sos)
         eos = 'endseq'
-        for seed in np.atleast_1d(seeds):
+        for seed in np.atleast_2d(seeds):
             if self.encoder.can_encode(seed):
                 vec = self.encoder.encode(seed)[0].reshape((1, self.encoder.size))
                 target = sos
