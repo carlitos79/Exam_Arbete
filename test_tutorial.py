@@ -3,7 +3,7 @@ from decoder import Decoder
 from encoder import Word2VecEncoder
 from encoder import SentimentEncoder
 
-# test word2vec encoderr
+# test word2vec encoder
 enc = Word2VecEncoder()
 enc.load('pretrained.wv')
 dec = Decoder.load(['w2v_root.bin', 'w2v_weights.bin'], enc)
