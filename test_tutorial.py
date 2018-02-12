@@ -1,7 +1,6 @@
 import pickle
 from decoder import Decoder
 from encoder import Word2VecEncoder
-from encoder import OneHotEncoder
 from encoder import SentimentEncoder
 
 # test word2vec encoder
