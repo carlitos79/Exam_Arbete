@@ -4,14 +4,26 @@ from ende_test import test_onehot
 from ende_test import test_multihot
 from ende_test import test_multiword2vec
 from ende_test import test_sentiment
+from ende_test import test_sentiment2
 from encoder import TopicModel
 
+
+# Word2VecSentiment
 test_sentiment(sample_size=0.5,
                epochs=5,
                batch_size=32,
                data_path='data/Ranked_Quotes.txt',
                word2vec_filename='pretrained.wv',
                dec_filenames=['sent_root.bin', 'sent_weights.bin'])
+
+# OneHot Sentiment
+test_sentiment2(sample_size=0.5,
+               epochs=5,
+               batch_size=32,
+               data_path='data/Ranked_Quotes.txt',
+               oh_filename='pretrained_oh_sentiment.bin',
+               dec_filenames=['sent_root.bin', 'sent_weights.bin'])
+
 
 test_multihot(sample_size=0.001,
               epochs=5,
