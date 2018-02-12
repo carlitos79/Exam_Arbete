@@ -182,26 +182,25 @@ class Decoder():
         seed_dense = Dense(latent_dim, activation='relu', name='seed_dense')(seed_dropout)
 
         # load pre-trained model if one exists
-        trained = None
-        if os.path.isfile('trained_gen.hdf5'):
-            gen_model = load_model('trained_gen.hdf5')
-            for layer in gen_model.layers:
-                layer.trainable = False
-            gen_input = gen_model.input
-            gen_output = gen_model.output
-        else:
-            gen_input = Input(shape=(self.max_length,), name='gen_input')
-            gen_embed = Embedding(vocab_size,
-                                  latent_dim,
-                                  mask_zero=True,
-                                  name='gen_embed')(gen_input)
-            gen_dropout = Dropout(0.5, name='gen_dropout')(gen_embed)
-            gen_lstm = LSTM(latent_dim, name='gen_lstm')(gen_dropout)
-            gen_model = Model(inputs=gen_input,
-                              outputs=gen_lstm,
-                              name='gen_model')
-            gen_output = gen_model.output
-            trained = gen_model
+        #trained = None
+        #if os.path.isfile('trained_gen.hdf5'):
+        #    gen_model = load_model('trained_gen.hdf5')
+        #    for layer in gen_model.layers:
+        #        layer.trainable = False
+        #    gen_input = gen_model.input
+        #    gen_output = gen_model.output
+        gen_input = Input(shape=(self.max_length,), name='gen_input')
+        gen_embed = Embedding(vocab_size,
+                              latent_dim,
+                              mask_zero=True,
+                              name='gen_embed')(gen_input)
+        gen_dropout = Dropout(0.5, name='gen_dropout')(gen_embed)
+        gen_lstm = LSTM(latent_dim, name='gen_lstm')(gen_dropout)
+        gen_model = Model(inputs=gen_input,
+                          outputs=gen_lstm,
+                          name='gen_model')
+        gen_output = gen_model.output
+        trained = gen_model
 
         # build multi-modal model
         dec_input = add([seed_dense, gen_output], name='dec_input')
