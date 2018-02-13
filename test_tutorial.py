@@ -19,10 +19,13 @@ w2v = Word2VecEncoder()
 w2v.load('pretrained.wv')
 enc = SentimentEncoder(w2v)
 dec = Decoder.load(['sent_root_w2v.bin', 'sent_weights_w2v.bin'], enc)
-print(dec.decode((1, 'age')))
+print(dec.decode([(1, 'age')]))
 
 # test one-hot + sentiment encoder
 oh = pickle.load(open('pretrained_oh.bin', 'rb'))
 enc = SentimentEncoder(oh)
 dec = Decoder.load(['sent_root_oh.bin', 'sent_weights_oh.bin'], enc)
-print(dec.decode((1, 'age')))
+print(dec.decode([(1, 'age')]))
+
+
+
